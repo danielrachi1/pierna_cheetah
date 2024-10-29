@@ -44,3 +44,12 @@ _Apuntes sobre el desarrollo del proyecto_
   - Hostname: cheetahpi.local
   Por lo tanto, para conectarse a la RPi via SSH, se usa el comando: `ssh cheetahpi@cheetahpi.local`. Estando conectado a la misma red WiFi que la RPi.
 - Instalé ROS2 Jazzy Jalisco en la RPi, siguiendo la [guía de instalación](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html#resources). No instalé las dev tools, porque todo el desarrollo lo haré en mi computador, no en la RPi. ROS-Base Install, no desktop.
+
+### 2024-10-28
+
+- Logré cargar un programa básico al microcontrolador ESP32. Lo que hice es lo que se puede ver en [este tutorial](https://esp32io.com/tutorials/esp32-hello-world). Encontré algunos problemas en el camino:
+  - La conexión debe ser USB tipo A (en el computador) a USB tipo C (en el microcontrolador). Si se usa un cable tipo-c a tipo-c, el micro no se encenderá.
+  - El puerto USB-C de la tarjeta de expansión de 30 pines es solo para alimentación. Si se quiere programar el micro se debe conectar directamente al puerto USB-C de la ESP32.
+  - Instalé y preparé Arduino IDE siguiendo los siguientes articulos: 
+    - [Downloading and installing the Arduino IDE 2](https://docs.arduino.cc/software/ide-v2/tutorials/getting-started/ide-v2-downloading-and-installing/)
+    - [ESP32 - Software Instalation](https://esp32io.com/tutorials/esp32-software-installation)
