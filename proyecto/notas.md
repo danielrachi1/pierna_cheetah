@@ -53,3 +53,8 @@ _Apuntes sobre el desarrollo del proyecto_
   - Instalé y preparé Arduino IDE siguiendo los siguientes articulos: 
     - [Downloading and installing the Arduino IDE 2](https://docs.arduino.cc/software/ide-v2/tutorials/getting-started/ide-v2-downloading-and-installing/)
     - [ESP32 - Software Instalation](https://esp32io.com/tutorials/esp32-software-installation)
+
+### 2024-10-29
+
+- Hablé con Juan Olaya y me explicó que la pata no tiene un control bien definido. Los movimientos realizados para el proyecto de PAI fueron hechos como rutinas predefinidas. Realizar un sistema de control más robusto debe ser una de mis principales prioridades para este proyecto.
+- Es prudente establecer una red VPN para conectarse al servidor del laboratorio. El principal proposito de esto sería poder enviar código a la instancia de GitLab sin tener que estar en la misma red WiFi que el laboratorio.
