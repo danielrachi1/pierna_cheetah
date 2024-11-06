@@ -54,6 +54,8 @@ Por lo tanto, para conectarse a la RPi vía SSH, se usa el comando: `ssh cheetah
 
 Instalé ROS2 Jazzy Jalisco en la RPi, siguiendo la [guía de instalación](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html#resources). No instalé las dev tools, porque todo el desarrollo lo haré en mi computador, no en la RPi. ROS-Base Install, no desktop.
 
+Se compró una [Tarjeta De Desarrollo Esp32 Tipo C](https://articulo.mercadolibre.com.co/MCO-1325137997-tarjeta-de-desarrollo-esp32-tipo-c-_JM) con su respectiva [Board Placa De Expansion Esp32 30 Pines](https://articulo.mercadolibre.com.co/MCO-1400089657-board-placa-de-expansion-esp32-30-pines-_JM). Costaron $28.500 y $14.000 COP respectivamente. $7,800 de envío.
+
 ### 2024-10-28
 
 Logré cargar un programa básico al microcontrolador ESP32. Descrito en [este tutorial](https://esp32io.com/tutorials/esp32-hello-world). Encontré algunos problemas en el camino:
@@ -92,3 +94,7 @@ Investigué otros transceivers diseñados para 3 V. De los que encontré, el �
 2. Utilizar un Arduino, sabiendo que puede que me dé problemas por su poca memoria.
 
 Intentaré utilizar los Sn65hvd230. Aunque no haya encontrado muy buenas referencias, cumplen con la especificación que estoy buscando, por lo que me gustaría ver de primera mano su calidad. Si estos no funcionan, tendré que utilizar un Arduino en vez de la ESP32. Los otros transceivers CAN no se consiguen muy fácilmente, por lo que tendría que importarlos, y esto retrasaría demasiado mi avance en el proyecto.
+
+### 2024-11-05
+
+- Se compraron 4 [Can Bus Sn65hvd230](https://articulo.mercadolibre.com.co/MCO-630269980-can-bus-sn65hvd230-_JM) costaron $12,000 cada una y  $7,425 de envío. Compré 4 para tener de sobra en caso de que alguno se dañe. Pero espero poder hacer el montaje del robot con uno solo.
