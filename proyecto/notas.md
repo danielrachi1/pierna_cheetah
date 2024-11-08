@@ -105,3 +105,13 @@ Realicé el montaje descrito en `prototipos/can_basico/`. Conecté los circuitos
 
 1. Utilizar los ejemplos de la librería [arduino-CAN](https://github.com/sandeepmistry/arduino-CAN). Esto no funcionó porque actualmente hay un error que evita que la librería compile para la ESP32: `esp_intr.h: No such file or directory`. Parece haber un workaround que implica instalar una version anterior del firmware de la ESP32, pero no creo que esto sea adecuado ya que hay que bloquear actualizaciones automaticas de todo el Arduino IDE.
 2. Seguir utilizando la librería arduino-CAN para el arduino (sender), pero usar la librería [ESP32-TWAI-CAN](https://docs.arduino.cc/libraries/esp32-twai-can/) para el ESP32 (reciever). Esto compiló, pero no logré leer los mensajes enviados por el Arduino.
+
+### 2024-11-07
+
+Seguí intentando hacer funcionar el experimento de ayer. Intenté buscar más librerías, busqué souciones a los problemas que me estaban dando las librerías, y verifiqué que todas las conexiones estuvieran en buen estado.
+
+No encontré ninguna solución, así que decidí cambiar lo que estaba intentando.
+
+En vez de usar Arduino IDE para programar la ESP32, decidí usar el Framework oficial que mantiene el fabricante del chip ESP32: [Espressif ESP-IDF](https://idf.espressif.com/).
+
+Espressif incluye varios programas de ejemplo, uno de ellos es: [TWAI Self Test Example](https://github.com/espressif/esp-idf/tree/v5.2.3/examples/peripherals/twai/twai_self_test). Como indica la documentación "The Self Test Example can be run as a simple test to determine whether a target (ESP32, ESP32-S2, ESP32-S3 or ESP32-C3) is properly connected to a working external transceiver." Ejecuté este programa en la ESP (conectada al SN65HVD230) y funciona justo como indica el ejemplo. Por lo que puedo estar seguro de que la ESP y el transciever funcinan bien.
