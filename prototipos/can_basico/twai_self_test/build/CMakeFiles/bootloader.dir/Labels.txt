@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/CMakeFiles/bootloader
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/CMakeFiles/bootloader.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/CMakeFiles/bootloader-complete.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
