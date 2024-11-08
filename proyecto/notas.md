@@ -97,4 +97,11 @@ Intentaré utilizar los Sn65hvd230. Aunque no haya encontrado muy buenas referen
 
 ### 2024-11-05
 
-- Se compraron 4 [Can Bus Sn65hvd230](https://articulo.mercadolibre.com.co/MCO-630269980-can-bus-sn65hvd230-_JM) costaron $12,000 cada una y  $7,425 de envío. Compré 4 para tener de sobra en caso de que alguno se dañe. Pero espero poder hacer el montaje del robot con uno solo.
+Se compraron 4 [Can Bus Sn65hvd230](https://articulo.mercadolibre.com.co/MCO-630269980-can-bus-sn65hvd230-_JM) costaron $12,000 cada una y  $7,425 de envío. Compré 4 para tener de sobra en caso de que alguno se dañe. Pero espero poder hacer el montaje del robot con uno solo.
+
+### 2024-11-06
+
+Realicé el montaje descrito en `prototipos/can_basico/`. Conecté los circuitos pero no logré hacer que cumpliera la función que quiero. Intenté:
+
+1. Utilizar los ejemplos de la librería [arduino-CAN](https://github.com/sandeepmistry/arduino-CAN). Esto no funcionó porque actualmente hay un error que evita que la librería compile para la ESP32: `esp_intr.h: No such file or directory`. Parece haber un workaround que implica instalar una version anterior del firmware de la ESP32, pero no creo que esto sea adecuado ya que hay que bloquear actualizaciones automaticas de todo el Arduino IDE.
+2. Seguir utilizando la librería arduino-CAN para el arduino (sender), pero usar la librería [ESP32-TWAI-CAN](https://docs.arduino.cc/libraries/esp32-twai-can/) para el ESP32 (reciever). Esto compiló, pero no logré leer los mensajes enviados por el Arduino.
