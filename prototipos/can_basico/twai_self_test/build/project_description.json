@@ -1,7 +1,7 @@
 {
     "version":            "1.1",
     "project_name":       "twai_self_test_example",
-    "project_version":    "42d472c-dirty",
+    "project_version":    "9f914be-dirty",
     "project_path":       "/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test",
     "idf_path":           "/home/danielrachi/esp/v5.3.1/esp-idf",
     "build_dir":          "/home/danielrachi/Documents/pierna_cheetah/prototipos/can_basico/twai_self_test/build",

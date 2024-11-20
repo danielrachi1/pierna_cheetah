@@ -115,3 +115,15 @@ No encontré ninguna solución, así que decidí cambiar lo que estaba intentand
 En vez de usar Arduino IDE para programar la ESP32, decidí usar el Framework oficial que mantiene el fabricante del chip ESP32: [Espressif ESP-IDF](https://idf.espressif.com/).
 
 Espressif incluye varios programas de ejemplo, uno de ellos es: [TWAI Self Test Example](https://github.com/espressif/esp-idf/tree/v5.2.3/examples/peripherals/twai/twai_self_test). Como indica la documentación "The Self Test Example can be run as a simple test to determine whether a target (ESP32, ESP32-S2, ESP32-S3 or ESP32-C3) is properly connected to a working external transceiver." Ejecuté este programa en la ESP (conectada al SN65HVD230) y funciona justo como indica el ejemplo. Por lo que puedo estar seguro de que la ESP y el transciever funcinan bien.
+
+### 2024-11-08
+
+Ahora que tengo un código que sé que funciona en la ESP con el transciever, me dedicaré a entenderlo.
+
+### 2024-11-12
+
+Para entender el código del ejemplo, utilicé [este chat](https://chatgpt.com/share/6734db3a-a838-8003-9c52-b4395c54cb12) para explicar/aclarar algunos puntos que no me quedaban muy claros.
+
+Edité el código para que la ESP32 solo recibiera paquetes, pero no funcionó. Como el ejemplo de enviarse paquetes a sí misma sí funciona, es seguro asumir que este es un problema con el Arduino o el MCP2515. 
+
+Ahora que entiendo cómo leer CAN frames desde la ESP32, procederé a entender qué datos puedo intercambiar con los motores. Para luego conectarlos a mi prototipo.
