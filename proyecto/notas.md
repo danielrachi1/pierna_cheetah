@@ -127,3 +127,33 @@ Para entender el código del ejemplo, utilicé [este chat](https://chatgpt.com/s
 Edité el código para que la ESP32 solo recibiera paquetes, pero no funcionó. Como el ejemplo de enviarse paquetes a sí misma sí funciona, es seguro asumir que este es un problema con el Arduino o el MCP2515. 
 
 Ahora que entiendo cómo leer CAN frames desde la ESP32, procederé a entender qué datos puedo intercambiar con los motores. Para luego conectarlos a mi prototipo.
+
+### 2024-11-20
+
+Estuve revisando a fondo algunos articulos de documentación de los motores, principalmente: [el de Bart](https://docs.google.com/document/d/1QIEI6IdHOcW4N1cRyucb33io4LriNYafIMs1sjLfTQU/edit?tab=t.0). Los motores se conocen por varios nombres. MIT cheetah motor es el diseño original que se uso para fabrical el cheetah del MIT, pero estos no son comerciales. SteadyWin es el nombre de la marca que los fabrica y comercializa. HobbyKing es un nombre que se les dío por su calidad casi profesional. (En algunos lados se refiere a HobbyKing como el Mini-Cheetah completo.)
+
+### 2024-11-21
+
+Quiero hacer un programa que haga lo siguiente:
+
+1. Enviar un comando de posición desde mi pc a la esp32.
+2. La esp32 lee la info enviada y la formatea para enviarla por can a los motores.
+3. Se envía el paquete can a los motores.
+4. El motor se mueve a la posición indicada y envía su respuesta por CAN.
+5. La esp lee la respuesta y la formatea para mostrarla en consola.
+6. La esp espera un nuevo comando de posición.
+7. Repetir hasta salir del programa.
+
+Algunos detalles:
+
+- El programa correrá completamente desde la terminal.
+- La esp estará conectada por USB y se comunicará por serial al pc.
+- [En este articulo](https://docs.google.com/document/d/1dzNVzblz6mqB3eZVEMyi2MtSngALHdgpTaDJIW_BpS4/edit?usp=sharing) se especifica cómo funciona la comunicación CAN con el motor.
+
+Para lograr esto, debo entender cómo:
+
+- Enviar y recibir datos por serial a la ESP32.
+- Convertir los datos enviados por serial a un paquete CAN.
+- Enviar y recibir paquetes CAN.
+
+Para lo primero, escribí dos programas sencillos. Uno en el IDE de Arduino y el otro usando ESP-IDF. Ambos se pueden encontrar en `experimentos/serial/`. Lo único destacable a mencioar acá es que se debieron hacer algunos [ajustes a la configuración](https://chatgpt.com/share/673fb215-b978-8003-8f16-062069c2e3a0) del ejemplo dado por espressif para que la esp32 usara el puerto serial por USB y no por los pines predeterminados del ejemplo: UART Port Number: 0, UART TX Pin: 1 UART RX Pin: 3.
