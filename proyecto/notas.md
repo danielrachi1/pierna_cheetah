@@ -157,3 +157,56 @@ Para lograr esto, debo entender cómo:
 - Enviar y recibir paquetes CAN.
 
 Para lo primero, escribí dos programas sencillos. Uno en el IDE de Arduino y el otro usando ESP-IDF. Ambos se pueden encontrar en `experimentos/serial/`. Lo único destacable a mencioar acá es que se debieron hacer algunos [ajustes a la configuración](https://chatgpt.com/share/673fb215-b978-8003-8f16-062069c2e3a0) del ejemplo dado por espressif para que la esp32 usara el puerto serial por USB y no por los pines predeterminados del ejemplo: UART Port Number: 0, UART TX Pin: 1 UART RX Pin: 3.
+
+### 2024-11-22
+
+El siguiente paso es poder convertir paquetes CAN.
+
+En [este archivo](https://os.mbed.com/users/benkatz/code/HKC_MiniCheetah//file/fe5056ac6740/CAN/CAN_com.cpp/) se especifica a detalle la estructura de los paquetes CAN que recibe y envía el motor.
+
+#### Estructura del Paquete de Respuesta CAN
+
+- **Posición** de 16 bits, entre -4π y 4π
+- **Velocidad** de 12 bits, entre -30 y +30 rad/s
+- **Corriente** de 12 bits, entre -40 y 40
+
+El paquete CAN consta de 5 palabras de 8 bits.
+
+Formateado de la siguiente manera. Para cada cantidad, el bit 0 es el LSB (bit menos significativo).
+
+| Byte | Bits en el byte | Contenido              | Bits de la cantidad      |
+|------|-----------------|------------------------|--------------------------|
+| 0    | 7-0             | posición\[15-8\]       | bits 15-8 de posición    |
+| 1    | 7-0             | posición\[7-0\]        | bits 7-0 de posición     |
+| 2    | 7-0             | velocidad\[11-4\]      | bits 11-4 de velocidad   |
+| 3    | 7-4             | corriente\[11-8\]      | bits 11-8 de corriente   |
+| 3    | 3-0             | velocidad\[3-0\]       | bits 3-0 de velocidad    |
+| 4    | 7-0             | corriente\[7-0\]       | bits 7-0 de corriente    |
+
+#### Estructura del Paquete de Comando CAN
+
+- **Comando de posición** de 16 bits, entre -4π y 4π
+- **Comando de velocidad** de 12 bits, entre -30 y +30 rad/s
+- **kp** de 12 bits, entre 0 y 500 N·m/rad
+- **kd** de 12 bits, entre 0 y 100 N·m·s/rad
+- **Par de avance** de 12 bits, entre -18 y 18 N·m
+
+El paquete CAN consta de 8 palabras de 8 bits.
+
+Formateado de la siguiente manera. Para cada cantidad, el bit 0 es el LSB (bit menos significativo).
+
+| Byte | Bits en el byte | Contenido              | Bits de la cantidad         |
+|------|-----------------|------------------------|-----------------------------|
+| 0    | 7-0             | posición\[15-8\]       | bits 15-8 de posición cmd   |
+| 1    | 7-0             | posición\[7-0\]        | bits 7-0 de posición cmd    |
+| 2    | 7-0             | velocidad\[11-4\]      | bits 11-4 de velocidad cmd  |
+| 3    | 7-4             | kp\[11-8\]             | bits 11-8 de kp             |
+| 3    | 3-0             | velocidad\[3-0\]       | bits 3-0 de velocidad cmd   |
+| 4    | 7-0             | kp\[7-0\]              | bits 7-0 de kp              |
+| 5    | 7-0             | kd\[11-4\]             | bits 11-4 de kd             |
+| 6    | 7-4             | par\[11-8\]            | bits 11-8 de par            |
+| 6    | 3-0             | kd\[3-0\]              | bits 3-0 de kd              |
+| 7    | 7-0             | par\[7-0\]             | bits 7-0 de par             |
+
+Escribí algunas funciones que ayudarán a manejar esta información en: `experimentos/can_utils/`.
+
