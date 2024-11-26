@@ -1,15 +1,13 @@
-// can_utils.c
-
 #include "can_utils.h"
 
 /**
- * @brief Maps a float x in [x_min,x_max] to unsigned int in [0,2^bits - 1]
+ * @brief Maps a float x in [x_min,x_max] to an unsigned int in [0,2^bits - 1].
  *
- * @param x     The float value to be converted
- * @param x_min Minimum value of x
- * @param x_max Maximum value of x
- * @param bits  Number of bits of the unsigned int
- * @return uint16_t The mapped unsigned integer
+ * @param x      The float value to be converted.
+ * @param x_min  Minimum value of x.
+ * @param x_max  Maximum value of x.
+ * @param bits   Number of bits of the unsigned int.
+ * @return uint16_t The mapped unsigned integer.
  */
 uint16_t float_to_uint(float x, float x_min, float x_max, uint8_t bits) {
     float span = x_max - x_min;
@@ -20,13 +18,13 @@ uint16_t float_to_uint(float x, float x_min, float x_max, uint8_t bits) {
 }
 
 /**
- * @brief Maps an unsigned int x_int in [0,2^bits -1] to float in [x_min,x_max]
+ * @brief Maps an unsigned int x_int in [0,2^bits -1] to a float in [x_min,x_max].
  *
- * @param x_int The unsigned int value to be converted
- * @param x_min Minimum value of x
- * @param x_max Maximum value of x
- * @param bits  Number of bits of the unsigned int
- * @return float The mapped float value
+ * @param x_int  The unsigned int value to be converted.
+ * @param x_min  Minimum value of x.
+ * @param x_max  Maximum value of x.
+ * @param bits   Number of bits of the unsigned int.
+ * @return float The mapped float value.
  */
 float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits) {
     float span = x_max - x_min;
@@ -35,36 +33,6 @@ float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits) {
     return result;
 }
 
-/**
- * @brief Packs the command data into an 8-byte array for CAN transmission.
- *
- * CAN Command Packet Structure:
- * - 16-bit position command, range: [-12.5, 12.5] radians
- * - 12-bit velocity command, range: [-65.0, 65.0] rad/s
- * - 12-bit kp (proportional gain), range: [0.0, 500.0] N-m/rad
- * - 12-bit kd (derivative gain), range: [0.0, 5.0] N-m*s/rad
- * - 12-bit feed-forward torque, range: [-18.0, 18.0] N-m
- *
- * The CAN packet consists of 8 bytes (8 x 8 bits), formatted as follows:
- * - For each quantity, bit 0 is the LSB (Least Significant Bit).
- *
- * Byte Index and Bit Allocation:
- * - Byte 0: [position[15:8]]
- * - Byte 1: [position[7:0]]
- * - Byte 2: [velocity[11:4]]
- * - Byte 3: [velocity[3:0], kp[11:8]]
- * - Byte 4: [kp[7:0]]
- * - Byte 5: [kd[11:4]]
- * - Byte 6: [kd[3:0], torque[11:8]]
- * - Byte 7: [torque[7:0]]
- *
- * @param p_des Desired position in radians.
- * @param v_des Desired velocity in rad/s.
- * @param kp    Proportional gain.
- * @param kd    Derivative gain.
- * @param t_ff  Feed-forward torque in N-m.
- * @param msg_data Pointer to an 8-byte array to store the packed data.
- */
 void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t *msg_data) {
     // Limit data to be within bounds
     if (p_des < P_MIN) p_des = P_MIN;
@@ -96,12 +64,15 @@ void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t 
     msg_data[7] = t_int & 0xFF;
 }
 
-/**
- * @brief Unpacks the reply message data from the motor
- *
- * @param msg_data Pointer to a 5-byte array containing the reply message
- * @param reply Pointer to a ReplyData struct to store the unpacked data
- */
+void pack_cmd_position(float p_des, uint8_t *msg_data) {
+    // Default values for other parameters
+    float v_des = 0.0f;
+    float kp = KP_MIN;
+    float kd = KD_MIN;
+    float t_ff = 0.0f;
+    pack_cmd(p_des, v_des, kp, kd, t_ff, msg_data);
+}
+
 void unpack_reply(uint8_t *msg_data, ReplyData *reply) {
     // Extract data from bytes
     uint16_t p_int = (msg_data[0] << 8) | msg_data[1];
