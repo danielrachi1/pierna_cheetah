@@ -210,3 +210,21 @@ Formateado de la siguiente manera. Para cada cantidad, el bit 0 es el LSB (bit m
 
 Escribí algunas funciones que ayudarán a manejar esta información en: `experimentos/can_utils/`.
 
+### 2024-11-25
+
+El siguiente paso sería entender cómo enviar y recibir paquetes CAN con la ESP32. Pero esto es algo que ya he hecho. El código para esto se puede encontrar en el [TWAI self test example](https://github.com/espressif/esp-idf/tree/master/examples/peripherals/twai/twai_self_test).
+
+Para ponerlo todo junto, escribiré el programa propuesto en `experimentos/single_motor_control/`.
+
+Para empezar, escribí agunas funciones para ayudarme con la comunicación serial UART. Correr unit tests fue más dificil de lo que esperaba, así que acá dejo el proceso:
+
+1. Escribir los tests. Conectar la ESP32.
+2. En VSCode, con la extensión de ESP-IDF instalada y configurada. `ctrl+shift+p` y buscar la opción: `ESP-IDF: Unit test: Install ESP-IDF pytests requirements.` Eso se debe hacer una sola vez.
+3. Barra lateral izquierda de VSCode > testing > refresh tests. (el simbolo de recarga en la parte superior.)
+4. Desde esa misma barra lateral, run tests.
+
+Si el build and flash del paso 3 falla, probablemente sea porque tienes alguna terminal leyendo datos de la ESP32. Cierra todas las terminales de VSCode y vuelve a darle a refresh tests.
+
+En algunas ocasiones tuve que hacer `ctrl+shift+p` y buscar la opción: `ESP-IDF: Unit test: build and flash unit test app for testing` antes del paso 3. No entiendo muy bien por qué, ya que supuse que el paso 3 incluye este comando. Pero si estás intentando hacer debug de uno de estos pasos, intenta correr el comando.
+
+Cada vez que cambies algún test o agregues nuevos debes darle a refresh tests.
