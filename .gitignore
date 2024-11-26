@@ -1,3 +1,4 @@
 experimentos/serial/uart_echo/build
 .vscode
 experimentos/single_motor_control/build
+experimentos/single_motor_control/unity-app
