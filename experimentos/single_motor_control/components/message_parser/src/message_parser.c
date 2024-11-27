@@ -82,12 +82,19 @@ void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t 
 
 void unpack_reply(uint8_t *msg_data, motor_reply_t *reply)
 {
-    // Extract data from bytes
-    uint16_t p_int = (msg_data[0] << 8) | msg_data[1];
-    uint16_t v_int = (msg_data[2] << 4) | (msg_data[3] >> 4);
-    uint16_t i_int = ((msg_data[3] & 0xF) << 8) | msg_data[4];
+    // Extract Motor ID if needed
+    reply->motor_id = msg_data[0];
 
-    // Convert unsigned ints to floats
+    // Extract position (16 bits from bytes 1 and 2)
+    uint16_t p_int = ((uint16_t)msg_data[1] << 8) | msg_data[2];
+    
+    // Extract velocity (12 bits: upper 8 bits from byte 3 and upper 4 bits from byte 4)
+    uint16_t v_int = ((uint16_t)msg_data[3] << 4) | (msg_data[4] >> 4);
+    
+    // Extract current (12 bits: lower 4 bits from byte 4 and all 8 bits from byte 5)
+    uint16_t i_int = (((uint16_t)(msg_data[4] & 0x0F)) << 8) | msg_data[5];
+    
+    // Convert raw values to scaled floats
     reply->position = uint_to_float(p_int, P_MIN, P_MAX, 16);
     reply->velocity = uint_to_float(v_int, V_MIN, V_MAX, 12);
     reply->current = uint_to_float(i_int, I_MIN, I_MAX, 12);

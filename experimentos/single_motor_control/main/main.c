@@ -257,7 +257,7 @@ static void uart_command_task(void *arg)
             }
             else
             {
-                // Assume it's a regular motor command. Example: P0.1_V1.0_KP1.0_KD2.0_TFF1.0
+                // Assume it's a regular motor command.
                 motor_command_t command = {0};
                 parse_command((char *)data, &command);
 
@@ -329,6 +329,7 @@ static void can_receive_task(void *arg)
 
                 // Log the unpacked reply data
                 ESP_LOGI(LOG_TAG, "Received CAN Reply:");
+                ESP_LOGI(LOG_TAG, "  Motor ID: %.d", reply.motor_id);
                 ESP_LOGI(LOG_TAG, "  Position: %.4f radians", reply.position);
                 ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", reply.velocity);
                 ESP_LOGI(LOG_TAG, "  Current: %.2f A", reply.current);

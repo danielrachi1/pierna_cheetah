@@ -153,23 +153,26 @@ TEST_CASE("unpack_reply", "[message_parser]")
 {
     /*
      * Simulated CAN reply message: (Calculated on spreadsheet)
-     * - position = 0x7FFF (32767) mapped to float: -0.000190737773708705
      *
-     * - velocity = 0x7FF (2047) mapped to float: -0.0158730158730123
+     * - Motor ID: 0x01
      *
-     * - current = 0x7FF (2047) mapped to float: -0.0158730158730123
+     * - Position = 0x7FFF (32767) mapped to float: -0.000190737773708705
+     *
+     * - Velocity = 0x7FF (2047) mapped to float: -0.0158730158730123
+     *
+     * - Current = 0x7FF (2047) mapped to float: -0.00976800976800973
      */
 
-    uint8_t msg_data[CAN_REPLY_LENGTH] = {0x7F, 0xFF, 0x7F, 0xF7, 0xFF};
+    uint8_t msg_data[6] = {0x01, 0x7F, 0xFF, 0x7F, 0xF7, 0xFF};
     motor_reply_t reply = {0};
 
     unpack_reply(msg_data, &reply);
 
     float expected_position = -0.000190737773708705f;
     float expected_velocity = -0.0158730158730123f;
-    float expected_current = -0.0158730158730123f;
+    float expected_current = -0.00976800976800973f;
 
-    // Values will be on order of magnitude 1E1. A 1% tolerance is taken.
+    // Values will be on 1E1 order of magnitude. Tolerance of 1%.
     float tolerance = 1.0E-1f;
 
     TEST_ASSERT_FLOAT_WITHIN(tolerance, expected_position, reply.position);

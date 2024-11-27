@@ -28,9 +28,10 @@
  */
 typedef struct
 {
+    uint8_t motor_id;
     float position; /**< Position in radians */
     float velocity; /**< Velocity in rad/s */
-    float current;   /**< Torque in N-m */
+    float current;  /**< Torque in N-m */
 } motor_reply_t;
 
 /**
@@ -70,7 +71,7 @@ float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits);
 /**
  * @brief Packs the command data into an 8-byte array for CAN transmission.
  *
- * CAN Command Packet Structure:
+ * The motor expects the following data on a command:
  * - 16-bit position command, range: [-12.5, 12.5] radians
  * - 12-bit velocity command, range: [-65.0, 65.0] rad/s
  * - 12-bit kp (proportional gain), range: [0.0, 500.0] N-m/rad
@@ -100,15 +101,21 @@ float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits);
 void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t *msg_data);
 
 /**
- * @brief Simplified function to pack command with only position (other parameters default).
- *
- * @param p_des     Desired position in radians.
- * @param msg_data  Pointer to an 8-byte array to store the packed data.
- */
-void pack_cmd_position(float p_des, uint8_t *msg_data);
-
-/**
  * @brief Unpacks the reply message data from the motor.
+ *
+ * The motor will send the following data:
+ * - 8 bit motor ID.
+ * - 16 bit position, scaled between P_MIN and P_MAX.
+ * - 12 bit velocity, between 0 and 4095, scaled V_MIN and V_MAX.
+ * - 12 bit current, between 0 and 4095, scaled to -40 and 40 Amps, corresponding to peak phase current.
+ *
+ * Byte index and bit allocation:
+ * - Byte 0: Motor ID
+ * - Byte 1: Position bits 15-8
+ * - Byte 2: Position bits 7-0
+ * - Byte 3: Velocity bits 11-4
+ * - Byte 4: Velocity bits 3-0: current bits 11-8
+ * - Byte 5: Current bits 7-0
  *
  * @param msg_data  Pointer to a 5-byte array containing the reply message.
  * @param reply     Pointer to a ReplyData struct to store the unpacked data.
