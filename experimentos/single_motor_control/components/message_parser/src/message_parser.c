@@ -85,12 +85,12 @@ void unpack_reply(uint8_t *msg_data, motor_reply_t *reply)
     // Extract data from bytes
     uint16_t p_int = (msg_data[0] << 8) | msg_data[1];
     uint16_t v_int = (msg_data[2] << 4) | (msg_data[3] >> 4);
-    uint16_t t_int = ((msg_data[3] & 0xF) << 8) | msg_data[4];
+    uint16_t i_int = ((msg_data[3] & 0xF) << 8) | msg_data[4];
 
     // Convert unsigned ints to floats
     reply->position = uint_to_float(p_int, P_MIN, P_MAX, 16);
     reply->velocity = uint_to_float(v_int, V_MIN, V_MAX, 12);
-    reply->torque = uint_to_float(t_int, T_MIN, T_MAX, 12);
+    reply->current = uint_to_float(i_int, I_MIN, I_MAX, 12);
 }
 
 void parse_command(const char *input_string, motor_command_t *command_struct)

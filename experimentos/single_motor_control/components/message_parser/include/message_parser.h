@@ -14,6 +14,8 @@
 #define KD_MAX 5.0f   /**< Maximum derivative gain, N-m*s/rad */
 #define T_MIN -18.0f  /**< Minimum torque, N-m */
 #define T_MAX 18.0f   /**< Maximum torque, N-m */
+#define I_MIN -40
+#define I_MAX 40
 
 #define CAN_CMD_LENGTH 8   /**< Command message length in bytes */
 #define CAN_REPLY_LENGTH 5 /**< Reply message length in bytes */
@@ -28,7 +30,7 @@ typedef struct
 {
     float position; /**< Position in radians */
     float velocity; /**< Velocity in rad/s */
-    float torque;   /**< Torque in N-m */
+    float current;   /**< Torque in N-m */
 } motor_reply_t;
 
 /**
