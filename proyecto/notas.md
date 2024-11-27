@@ -228,3 +228,13 @@ Si el build and flash del paso 3 falla, probablemente sea porque tienes alguna t
 En algunas ocasiones tuve que hacer `ctrl+shift+p` y buscar la opción: `ESP-IDF: Unit test: build and flash unit test app for testing` antes del paso 3. No entiendo muy bien por qué, ya que supuse que el paso 3 incluye este comando. Pero si estás intentando hacer debug de uno de estos pasos, intenta correr el comando.
 
 Cada vez que cambies algún test o agregues nuevos debes darle a refresh tests.
+
+### 2024-11-26
+
+Si se agregan tests nuevos, es buena idea cerrar y volver a abrir VSCode.
+
+Es más facil ver resultados de tests en la pestaña _monitor device_. Sin embargo, este algunas veces falla, y la pestaña no abre. Para volver a hacerlo funcionar lo que hice fue:
+
+1. Build flash and monitor el programa en el que se está trabajando. (No la test app.)
+2. Build and flash unit test app for testing.
+3. Abrir el monitor.
