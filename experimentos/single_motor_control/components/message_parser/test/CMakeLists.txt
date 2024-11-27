@@ -1,6 +1,6 @@
 idf_component_register(
-    SRCS "test_can_utils.c"
+    SRCS "test_message_parser.c"
     INCLUDE_DIRS "."
     PRIV_INCLUDE_DIRS "../include"
-    REQUIRES unity can_utils
+    REQUIRES unity message_parser
 )

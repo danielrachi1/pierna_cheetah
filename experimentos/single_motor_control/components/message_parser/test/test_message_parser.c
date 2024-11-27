@@ -1,7 +1,47 @@
 #include "unity.h"
-#include "can_utils.h"
+#include "message_parser.h"
 
-TEST_CASE("float_to_uint standard values", "[can_utils]")
+TEST_CASE("Parse command with valid input", "[message_parser]")
+{
+    const char *input = "P1.2345_V2.3456_KP3.4567_KD4.5678_TFF5.6789";
+    motor_command_t command = {0};
+    parse_command(input, &command);
+
+    TEST_ASSERT_EQUAL_FLOAT(1.2345f, command.p_des);
+    TEST_ASSERT_EQUAL_FLOAT(2.3456f, command.v_des);
+    TEST_ASSERT_EQUAL_FLOAT(3.4567f, command.kp);
+    TEST_ASSERT_EQUAL_FLOAT(4.5678f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(5.6789f, command.t_ff);
+}
+
+TEST_CASE("Parse command with missing parameters", "[message_parser]")
+{
+    const char *input = "P1.0_V2.0_KD0.5";
+    motor_command_t command = {0};
+    parse_command(input, &command);
+
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, command.p_des);
+    TEST_ASSERT_EQUAL_FLOAT(2.0f, command.v_des);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp); // Default or zero
+    TEST_ASSERT_EQUAL_FLOAT(0.5f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.t_ff); // Default or zero
+}
+
+TEST_CASE("Parse command with invalid format", "[message_parser]")
+{
+    const char *input = "Invalid_Input_String";
+    motor_command_t command = {0};
+    parse_command(input, &command);
+
+    // All values should remain at their initialized state (zero)
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.p_des);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.v_des);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.t_ff);
+}
+
+TEST_CASE("float_to_uint standard values", "[message_parser]")
 {
     float x = 0.0f;
     float x_min = -10.0f;
@@ -13,7 +53,7 @@ TEST_CASE("float_to_uint standard values", "[can_utils]")
     TEST_ASSERT_EQUAL_UINT16(expected, result);
 }
 
-TEST_CASE("float_to_uint edge values", "[can_utils]")
+TEST_CASE("float_to_uint edge values", "[message_parser]")
 {
     float x_min = -10.0f;
     float x_max = 10.0f;
@@ -30,7 +70,7 @@ TEST_CASE("float_to_uint edge values", "[can_utils]")
     TEST_ASSERT_EQUAL_UINT16(255, max_result);
 }
 
-TEST_CASE("uint_to_float standard values", "[can_utils]")
+TEST_CASE("uint_to_float standard values", "[message_parser]")
 {
     uint16_t x_int = 127;
     float x_min = -10.0f;
@@ -43,7 +83,7 @@ TEST_CASE("uint_to_float standard values", "[can_utils]")
     TEST_ASSERT_EQUAL_FLOAT(expected, result);
 }
 
-TEST_CASE("uint_to_float edge values", "[can_utils]")
+TEST_CASE("uint_to_float edge values", "[message_parser]")
 {
     float x_min = -10.0f;
     float x_max = 10.0f;
@@ -60,7 +100,7 @@ TEST_CASE("uint_to_float edge values", "[can_utils]")
     TEST_ASSERT_EQUAL_FLOAT(x_max, max_result);
 }
 
-TEST_CASE("pack_cmd", "[can_utils]")
+TEST_CASE("pack_cmd", "[message_parser]")
 {
     float p_des = 0.0f;
     float v_des = 0.0f;
@@ -109,7 +149,7 @@ TEST_CASE("pack_cmd", "[can_utils]")
     }
 }
 
-TEST_CASE("unpack_reply", "[can_utils]")
+TEST_CASE("unpack_reply", "[message_parser]")
 {
     /*
      * Simulated CAN reply message: (Calculated on spreadsheet)
@@ -121,7 +161,7 @@ TEST_CASE("unpack_reply", "[can_utils]")
      */
 
     uint8_t msg_data[CAN_REPLY_LENGTH] = {0x7F, 0xFF, 0x7F, 0xF7, 0xFF};
-    ReplyData reply = {0};
+    motor_reply_t reply = {0};
 
     unpack_reply(msg_data, &reply);
 
