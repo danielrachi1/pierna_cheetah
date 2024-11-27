@@ -68,7 +68,7 @@ static esp_err_t send_can_message(uint8_t *msg_data, size_t length)
     // Set message fields
     message.identifier = CAN_ID;
     message.data_length_code = length;
-    message.self = 1;
+    // message.self = 1;
 
     memcpy(message.data, msg_data, length);
 
@@ -192,7 +192,7 @@ static void uart_command_task(void *arg)
                 ESP_LOGE(LOG_TAG, "Failed to send CAN message");
             }
 
-            // Receive the CAN message via TWAI (self-reception in loopback mode)
+            // Receive the CAN message via TWAI
             twai_message_t received_msg;
             if (receive_can_message(&received_msg) == ESP_OK)
             {
@@ -201,6 +201,24 @@ static void uart_command_task(void *arg)
             else
             {
                 ESP_LOGE(LOG_TAG, "Failed to receive CAN message");
+            }
+
+            if (received_msg.data_length_code >= 5) // Ensure there are enough bytes to unpack
+            {
+                motor_reply_t reply = {0}; // Initialize the reply structure
+
+                // Call the unpack_reply function
+                unpack_reply(received_msg.data, &reply);
+
+                // Log the unpacked reply data
+                ESP_LOGI(LOG_TAG, "Unpacked Reply Data:");
+                ESP_LOGI(LOG_TAG, "  Position: %.4f radians", reply.position);
+                ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", reply.velocity);
+                ESP_LOGI(LOG_TAG, "  Current: %.2f A", reply.current);
+            }
+            else
+            {
+                ESP_LOGE(LOG_TAG, "Received CAN message does not contain enough data to unpack");
             }
 
             // Optionally, clear the buffer or handle the command as needed
