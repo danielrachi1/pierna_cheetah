@@ -6,3 +6,4 @@ experimentos/ESP_IDF_WEB_SERVER/build
 esp32_firmware/build
 esp32_firmware/sdkconfig
 esp32_firmware/sdkconfig.old
+esp32_firmware/unity-app
