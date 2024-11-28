@@ -246,3 +246,13 @@ Conecté la ESP32 al motor 1 de la pata. El programa funcionó y logré enviar c
 En uno de los primeros comandos enviados, el motor se movió más rápido de lo que esperaba. Lo que llevó a una fractura en el tercer eslabón. Ya estaba en mis planes reemplazar esta pieza, por lo que esto no es un problema grave.
 
 Desacoplé los eslabones 2 y 3. Esto me permitirá realizar pruebas más seguras mientras entiendo correctamente los parámetros de movimiento del motor.
+
+### 2024-11-28
+
+Ahora que sé cómo enviar comandos a los motores, quiero implementar un mejor sistema para controlar el robot. Escribí esta especificación para referencia futura:
+
+Voy a desarrollar un sistema de control robótico utilizando el microcontrolador ESP32 para gestionar un robot de tres grados de libertad (3-DOF). El ESP32 es una opción adecuada debido a su bajo costo, eficiencia energética y capacidades integradas de Wi-Fi y Bluetooth.
+
+El sistema contará con una interfaz gráfica de usuario (GUI) basada en la web, alojada directamente en el ESP32. Esta elección permite a los usuarios supervisar y controlar el robot desde cualquier dispositivo con un navegador web, sin necesidad de hardware adicional. La GUI proporcionará una plataforma intuitiva para interactuar con el robot, facilitando su operación y monitoreo. Esto estará inspirado en Mainsail.
+
+Además, integraré un controlador físico conectado al ESP32 mediante Bluetooth. Esta configuración permite el control manual directo del robot, proporcionando una alternativa al control basado en la web. El ESP32 procesará las entradas tanto de la GUI como del controlador físico, traduciéndolas en comandos precisos para los motores que controlan los movimientos del robot. Esta doble interfaz ofrece flexibilidad, permitiendo al usuario elegir entre el control remoto a través de la interfaz web o el control directo mediante el controlador físico, según las necesidades específicas de cada situación.
