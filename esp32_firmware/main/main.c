@@ -346,18 +346,106 @@ const char *html_page = "<!DOCTYPE html>\
 <head>\
     <title>ESP32 Motor Controller</title>\
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+    <style>\
+        body {\
+            font-family: Arial, sans-serif;\
+            margin: 20px;\
+        }\
+        h1, h2 {\
+            color: #333;\
+        }\
+        label {\
+            display: inline-block;\
+            width: 150px;\
+            margin-top: 10px;\
+        }\
+        input[type=\"number\"] {\
+            width: 200px;\
+            padding: 5px;\
+            margin-top: 10px;\
+        }\
+        button {\
+            padding: 10px 20px;\
+            margin-top: 20px;\
+            background-color: #4CAF50;\
+            color: white;\
+            border: none;\
+            cursor: pointer;\
+            font-size: 16px;\
+        }\
+        button:hover {\
+            background-color: #45a049;\
+        }\
+        .command-section, .special-commands-section {\
+            margin-bottom: 40px;\
+        }\
+    </style>\
 </head>\
 <body>\
     <h1>Motor Controller</h1>\
-    <textarea id=\"command\" rows=\"10\" cols=\"50\"></textarea><br>\
-    <button onclick=\"sendCommand()\">Send Command</button>\
+    \
+    <!-- Command Section -->\
+    <div class=\"command-section\">\
+        <h2>Send Command</h2>\
+        <label for=\"position\">Position:</label>\
+        <input type=\"number\" id=\"position\" name=\"position\"><br>\
+        \
+        <label for=\"velocity\">Velocity:</label>\
+        <input type=\"number\" id=\"velocity\" name=\"velocity\"><br>\
+        \
+        <label for=\"kp\">Kp:</label>\
+        <input type=\"number\" id=\"kp\" name=\"kp\"><br>\
+        \
+        <label for=\"kd\">Kd:</label>\
+        <input type=\"number\" id=\"kd\" name=\"kd\"><br>\
+        \
+        <label for=\"feed_forward_torque\">Feed Forward Torque:</label>\
+        <input type=\"number\" id=\"feed_forward_torque\" name=\"feed_forward_torque\"><br>\
+        \
+        <button onclick=\"sendCommand()\">Send Command</button>\
+    </div>\
+    \
+    <!-- Special Commands Section -->\
+    <div class=\"special-commands-section\">\
+        <h2>Special Commands</h2>\
+        <button onclick=\"sendSpecialCommand('ENTER_MODE')\">ENTER_MODE</button>\
+        <button onclick=\"sendSpecialCommand('EXIT_MODE')\">EXIT_MODE</button>\
+        <button onclick=\"sendSpecialCommand('ZERO_POS')\">ZERO_POS</button>\
+    </div>\
+    \
     <script>\
         function sendCommand() {\
-            var commandText = document.getElementById('command').value;\
+            var position = parseFloat(document.getElementById('position').value);\
+            var velocity = parseFloat(document.getElementById('velocity').value);\
+            var kp = parseFloat(document.getElementById('kp').value);\
+            var kd = parseFloat(document.getElementById('kd').value);\
+            var feed_forward_torque = parseFloat(document.getElementById('feed_forward_torque').value);\
+            \
+            var command = {\
+                \"position\": position,\
+                \"velocity\": velocity,\
+                \"kp\": kp,\
+                \"kd\": kd,\
+                \"feed_forward_torque\": feed_forward_torque\
+            };\
+            \
             fetch('/send_command', {\
                 method: 'POST',\
                 headers: { 'Content-Type': 'application/json' },\
-                body: commandText\
+                body: JSON.stringify(command)\
+            })\
+            .then(response => response.text())\
+            .then(data => alert(data))\
+            .catch(error => console.error('Error:', error));\
+        }\
+        \
+        function sendSpecialCommand(commandName) {\
+            var command = { \"command\": commandName };\
+            \
+            fetch('/send_command', {\
+                method: 'POST',\
+                headers: { 'Content-Type': 'application/json' },\
+                body: JSON.stringify(command)\
             })\
             .then(response => response.text())\
             .then(data => alert(data))\
