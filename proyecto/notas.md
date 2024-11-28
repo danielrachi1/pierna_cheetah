@@ -238,3 +238,11 @@ Es más facil ver resultados de tests en la pestaña _monitor device_. Sin embar
 1. Build flash and monitor el programa en el que se está trabajando. (No la test app.)
 2. Build and flash unit test app for testing.
 3. Abrir el monitor.
+
+### 2024-11-27
+
+Conecté la ESP32 al motor 1 de la pata. El programa funcionó y logré enviar comandos básicos al motor. Hice algunos ajustes a cómo la ESP32 interpreta los mensajes de respuesta del motor.
+
+En uno de los primeros comandos enviados, el motor se movió más rápido de lo que esperaba. Lo que llevó a una fractura en el tercer eslabón. Ya estaba en mis planes reemplazar esta pieza, por lo que esto no es un problema grave.
+
+Desacoplé los eslabones 2 y 3. Esto me permitirá realizar pruebas más seguras mientras entiendo correctamente los parámetros de movimiento del motor.
