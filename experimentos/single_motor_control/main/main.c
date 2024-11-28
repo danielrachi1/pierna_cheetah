@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "driver/twai.h"
 #include "message_parser.h"
+#include "cJSON.h" // Include cJSON library
 
 #define LOG_TAG "MOTOR_CONTROLLER"
 
@@ -16,7 +17,9 @@
 #define UART_TXD (CONFIG_EXAMPLE_UART_TXD)
 #define UART_RTS (UART_PIN_NO_CHANGE)
 #define UART_CTS (UART_PIN_NO_CHANGE)
-#define TASK_STACK_SIZE (CONFIG_EXAMPLE_TASK_STACK_SIZE)
+// Increase stack size for UART task
+#define UART_TASK_STACK_SIZE (4096)
+#define CAN_TASK_STACK_SIZE (4096)
 #define BUF_SIZE (1024)  // UART buffer size
 #define CAN_CMD_LENGTH 8 // CAN message length
 
@@ -77,20 +80,14 @@ static esp_err_t send_can_message(uint8_t *msg_data, size_t length)
     // Set message fields
     message.identifier = CAN_ID;
     message.data_length_code = length;
-
+    // message.self = 1; 
     memcpy(message.data, msg_data, length);
 
-    // *** Added Logging: Log the entire TWAI message before sending ***
-    ESP_LOGI(LOG_TAG, "Preparing to Send CAN Message:");
-    ESP_LOGI(LOG_TAG, "  identifier: 0x%lX", (unsigned long)message.identifier);
-    ESP_LOGI(LOG_TAG, "  data_length_code: %u", message.data_length_code);
-
-    // Log each byte of the CAN message data
-    ESP_LOGI(LOG_TAG, "  Data:");
-    for (int i = 0; i < message.data_length_code; i++)
-    {
-        ESP_LOGI(LOG_TAG, "    Byte %d: 0x%02X", i, message.data[i]);
-    }
+    // Log the raw TWAI message before sending
+    ESP_LOGI(LOG_TAG, "Sending TWAI Message:");
+    ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message.identifier);
+    ESP_LOGI(LOG_TAG, "  Data Length: %d", message.data_length_code);
+    ESP_LOG_BUFFER_HEX(LOG_TAG, message.data, message.data_length_code);
 
     // Transmit the message
     esp_err_t err = twai_transmit(&message, pdMS_TO_TICKS(1000)); // Timeout 1 second
@@ -118,18 +115,13 @@ static esp_err_t receive_can_message(twai_message_t *message)
 
     if (err == ESP_OK)
     {
-        ESP_LOGI(LOG_TAG, "Received CAN Message:");
+        // Log the raw TWAI message after receiving
+        ESP_LOGI(LOG_TAG, "Received TWAI Message:");
+        ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message->identifier);
+        ESP_LOGI(LOG_TAG, "  Data Length: %d", message->data_length_code);
+        ESP_LOG_BUFFER_HEX(LOG_TAG, message->data, message->data_length_code);
 
-        // Log each field with appropriate format specifiers and casting
-        ESP_LOGI(LOG_TAG, "  identifier: 0x%lX", (unsigned long)message->identifier);
-        ESP_LOGI(LOG_TAG, "  data_length_code: %u", message->data_length_code);
-
-        // Log each byte of the CAN message data
-        ESP_LOGI(LOG_TAG, "  Data:");
-        for (int i = 0; i < message->data_length_code; i++)
-        {
-            ESP_LOGI(LOG_TAG, "    Byte %d: 0x%02X", i, message->data[i]);
-        }
+        // Process received message if needed
     }
     else if (err != ESP_ERR_TIMEOUT)
     {
@@ -212,6 +204,8 @@ static void uart_command_task(void *arg)
         return;
     }
 
+    char special_command[BUF_SIZE]; // Buffer to hold special command if any
+
     while (1)
     {
         // Read data from UART
@@ -221,57 +215,70 @@ static void uart_command_task(void *arg)
             data[len] = '\0'; // Null-terminate the received string
             ESP_LOGI(LOG_TAG, "Received String: %s", (char *)data);
 
-            // Check for special commands first
-            if (strncmp((char *)data, "ENTER_MODE", strlen("ENTER_MODE")) == 0)
+            motor_command_t command = {0};
+            memset(special_command, 0, sizeof(special_command));
+
+            // Parse the JSON command
+            if (!parse_json_command((char *)data, &command, special_command))
             {
-                if (send_enter_motor_mode() == ESP_OK)
-                {
-                    ESP_LOGI(LOG_TAG, "Enter Motor Mode command sent successfully");
-                }
-                else
-                {
-                    ESP_LOGE(LOG_TAG, "Failed to send Enter Motor Mode command");
-                }
+                ESP_LOGE(LOG_TAG, "Failed to parse JSON command");
+                // You may want to send an error response or take other action
             }
-            else if (strncmp((char *)data, "EXIT_MODE", strlen("EXIT_MODE")) == 0)
+            else if (strlen(special_command) > 0)
             {
-                if (send_exit_motor_mode() == ESP_OK)
+                // Process special command
+                if (strcmp(special_command, "ENTER_MODE") == 0)
                 {
-                    ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
+                    if (send_enter_motor_mode() == ESP_OK)
+                    {
+                        ESP_LOGI(LOG_TAG, "Enter Motor Mode command sent successfully");
+                    }
+                    else
+                    {
+                        ESP_LOGE(LOG_TAG, "Failed to send Enter Motor Mode command");
+                    }
+                }
+                else if (strcmp(special_command, "EXIT_MODE") == 0)
+                {
+                    if (send_exit_motor_mode() == ESP_OK)
+                    {
+                        ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
+                    }
+                    else
+                    {
+                        ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command");
+                    }
+                }
+                else if (strcmp(special_command, "ZERO_POS") == 0)
+                {
+                    if (send_zero_position_sensor() == ESP_OK)
+                    {
+                        ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
+                    }
+                    else
+                    {
+                        ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
+                    }
                 }
                 else
                 {
-                    ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command");
-                }
-            }
-            else if (strncmp((char *)data, "ZERO_POS", strlen("ZERO_POS")) == 0)
-            {
-                if (send_zero_position_sensor() == ESP_OK)
-                {
-                    ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
-                }
-                else
-                {
-                    ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
+                    ESP_LOGW(LOG_TAG, "Unknown special command: %s", special_command);
                 }
             }
             else
             {
                 // Assume it's a regular motor command.
-                motor_command_t command = {0};
-                parse_command((char *)data, &command);
-
                 // Log the parsed command data
                 ESP_LOGI(LOG_TAG, "Parsed Command Data:");
-                ESP_LOGI(LOG_TAG, "  Position (p_des): %.4f radians", command.p_des);
-                ESP_LOGI(LOG_TAG, "  Velocity (v_des): %.4f rad/s", command.v_des);
+                ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
+                ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command.velocity);
                 ESP_LOGI(LOG_TAG, "  Proportional Gain (kp): %.4f N-m/rad", command.kp);
                 ESP_LOGI(LOG_TAG, "  Derivative Gain (kd): %.4f N-m*s/rad", command.kd);
-                ESP_LOGI(LOG_TAG, "  Feed-Forward Torque (t_ff): %.4f N-m", command.t_ff);
+                ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
 
                 // Pack the command data into a CAN frame
                 uint8_t can_msg_data[CAN_CMD_LENGTH] = {0}; // 8-byte CAN message buffer
-                pack_cmd(command.p_des, command.v_des, command.kp, command.kd, command.t_ff, can_msg_data);
+                pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
 
                 // Send the CAN message via TWAI
                 if (send_can_message(can_msg_data, CAN_CMD_LENGTH) == ESP_OK)
@@ -282,9 +289,6 @@ static void uart_command_task(void *arg)
                 {
                     ESP_LOGE(LOG_TAG, "Failed to send CAN message");
                 }
-
-                // Optionally, you can handle immediate responses here if needed
-                // For now, reception is handled in the separate CAN receive task
             }
 
             // Optionally, clear the buffer or handle the command as needed
@@ -328,8 +332,8 @@ static void can_receive_task(void *arg)
                 unpack_reply(received_msg.data, &reply);
 
                 // Log the unpacked reply data
-                ESP_LOGI(LOG_TAG, "Received CAN Reply:");
-                ESP_LOGI(LOG_TAG, "  Motor ID: %.d", reply.motor_id);
+                ESP_LOGI(LOG_TAG, "Unpacked reply:");
+                ESP_LOGI(LOG_TAG, "  Motor ID: %d", reply.motor_id);
                 ESP_LOGI(LOG_TAG, "  Position: %.4f radians", reply.position);
                 ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", reply.velocity);
                 ESP_LOGI(LOG_TAG, "  Current: %.2f A", reply.current);
@@ -359,8 +363,8 @@ void app_main(void)
     twai_init();
 
     // Create UART command task
-    xTaskCreate(uart_command_task, "uart_command_task", TASK_STACK_SIZE, NULL, 10, NULL);
+    xTaskCreate(uart_command_task, "uart_command_task", UART_TASK_STACK_SIZE, NULL, 10, NULL);
 
     // Create CAN receive task
-    xTaskCreate(can_receive_task, "can_receive_task", TASK_STACK_SIZE, NULL, 10, NULL);
+    xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
 }

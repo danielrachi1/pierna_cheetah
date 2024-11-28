@@ -2,6 +2,8 @@
 #define MESSAGE_PARSER_H
 
 #include <stdint.h>
+#include <stdbool.h>
+#include "cJSON.h" // Include cJSON library
 
 /* Define ranges for position, velocity, etc. */
 #define P_MIN -12.5f  /**< Minimum position, radians */
@@ -39,11 +41,11 @@ typedef struct
  */
 typedef struct
 {
-    float p_des; /**< Desired position in radians */
-    float v_des; /**< Desired velocity in rad/s */
+    float position; /**< Desired position in radians */
+    float velocity; /**< Desired velocity in rad/s */
     float kp;    /**< Proportional gain */
     float kd;    /**< Derivative gain */
-    float t_ff;  /**< Feed-forward torque in N-m */
+    float feed_forward_torque;  /**< Feed-forward torque in N-m */
 } motor_command_t;
 
 /**
@@ -71,51 +73,17 @@ float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits);
 /**
  * @brief Packs the command data into an 8-byte array for CAN transmission.
  *
- * The motor expects the following data on a command:
- * - 16-bit position command, range: [-12.5, 12.5] radians
- * - 12-bit velocity command, range: [-65.0, 65.0] rad/s
- * - 12-bit kp (proportional gain), range: [0.0, 500.0] N-m/rad
- * - 12-bit kd (derivative gain), range: [0.0, 5.0] N-m*s/rad
- * - 12-bit feed-forward torque, range: [-18.0, 18.0] N-m
- *
- * The CAN packet consists of 8 bytes (8 x 8 bits), formatted as follows:
- * - For each quantity, bit 0 is the LSB (Least Significant Bit).
- *
- * Byte Index and Bit Allocation:
- * - Byte 0: [position[15:8]]
- * - Byte 1: [position[7:0]]
- * - Byte 2: [velocity[11:4]]
- * - Byte 3: [velocity[3:0], kp[11:8]]
- * - Byte 4: [kp[7:0]]
- * - Byte 5: [kd[11:4]]
- * - Byte 6: [kd[3:0], torque[11:8]]
- * - Byte 7: [torque[7:0]]
- *
- * @param p_des     Desired position in radians.
- * @param v_des     Desired velocity in rad/s.
+ * @param position     Desired position in radians.
+ * @param velocity     Desired velocity in rad/s.
  * @param kp        Proportional gain.
  * @param kd        Derivative gain.
- * @param t_ff      Feed-forward torque in N-m.
+ * @param feed_forward_torque      Feed-forward torque in N-m.
  * @param msg_data  Pointer to an 8-byte array to store the packed data.
  */
-void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t *msg_data);
+void pack_cmd(float position, float velocity, float kp, float kd, float feed_forward_torque, uint8_t *msg_data);
 
 /**
  * @brief Unpacks the reply message data from the motor.
- *
- * The motor will send the following data:
- * - 8 bit motor ID.
- * - 16 bit position, scaled between P_MIN and P_MAX.
- * - 12 bit velocity, between 0 and 4095, scaled V_MIN and V_MAX.
- * - 12 bit current, between 0 and 4095, scaled to -40 and 40 Amps, corresponding to peak phase current.
- *
- * Byte index and bit allocation:
- * - Byte 0: Motor ID
- * - Byte 1: Position bits 15-8
- * - Byte 2: Position bits 7-0
- * - Byte 3: Velocity bits 11-4
- * - Byte 4: Velocity bits 3-0: current bits 11-8
- * - Byte 5: Current bits 7-0
  *
  * @param msg_data  Pointer to a 5-byte array containing the reply message.
  * @param reply     Pointer to a ReplyData struct to store the unpacked data.
@@ -123,17 +91,14 @@ void pack_cmd(float p_des, float v_des, float kp, float kd, float t_ff, uint8_t 
 void unpack_reply(uint8_t *msg_data, motor_reply_t *reply);
 
 /**
- * @brief Parses a command string and fills the motor_command_t structure.
+ * @brief Parses a JSON command string and fills the motor_command_t structure.
  *
- * This function takes an input string containing motor control parameters
- * formatted as "P<p_des>_V<v_des>_KP<kp>_KD<kd>_TFF<t_ff>" and parses it to
- * extract the floating-point values for each parameter. The extracted values
- * are stored in the provided motor_command_t structure.
- *
- * @param[in]  input_string    The command string to parse.
- * @param[out] command_struct  Pointer to the structure where parsed values
- *                             will be stored.
+ * @param[in]  json_string      The JSON command string to parse.
+ * @param[out] command_struct   Pointer to the structure where parsed values
+ *                              will be stored.
+ * @param[out] special_command  Buffer to store any special command found.
+ * @return     true if parsing was successful, false otherwise.
  */
-void parse_command(const char *input_string, motor_command_t *command_struct);
+bool parse_json_command(const char *json_string, motor_command_t *command_struct, char *special_command);
 
 #endif // MESSAGE_PARSER_H

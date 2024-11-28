@@ -1,44 +1,97 @@
 #include "unity.h"
 #include "message_parser.h"
 
-TEST_CASE("Parse command with valid input", "[message_parser]")
+TEST_CASE("Parse JSON command with valid input", "[message_parser]")
 {
-    const char *input = "P1.2345_V2.3456_KP3.4567_KD4.5678_TFF5.6789";
+    const char *input = "{\"position\": 1.2345, \"velocity\": 2.3456, \"kp\": 3.4567, \"kd\": 4.5678, \"feed_forward_torque\": 5.6789}";
     motor_command_t command = {0};
-    parse_command(input, &command);
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
 
-    TEST_ASSERT_EQUAL_FLOAT(1.2345f, command.p_des);
-    TEST_ASSERT_EQUAL_FLOAT(2.3456f, command.v_des);
+    TEST_ASSERT_EQUAL_STRING("", special_command); // No special command
+    TEST_ASSERT_EQUAL_FLOAT(1.2345f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(2.3456f, command.velocity);
     TEST_ASSERT_EQUAL_FLOAT(3.4567f, command.kp);
     TEST_ASSERT_EQUAL_FLOAT(4.5678f, command.kd);
-    TEST_ASSERT_EQUAL_FLOAT(5.6789f, command.t_ff);
+    TEST_ASSERT_EQUAL_FLOAT(5.6789f, command.feed_forward_torque);
 }
 
-TEST_CASE("Parse command with missing parameters", "[message_parser]")
+TEST_CASE("Parse JSON command with missing parameters", "[message_parser]")
 {
-    const char *input = "P1.0_V2.0_KD0.5";
+    const char *input = "{\"position\": 1.0, \"velocity\": 2.0, \"kd\": 0.5}";
     motor_command_t command = {0};
-    parse_command(input, &command);
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
 
-    TEST_ASSERT_EQUAL_FLOAT(1.0f, command.p_des);
-    TEST_ASSERT_EQUAL_FLOAT(2.0f, command.v_des);
+    TEST_ASSERT_EQUAL_STRING("", special_command); // No special command
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(2.0f, command.velocity);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp); // Default or zero
     TEST_ASSERT_EQUAL_FLOAT(0.5f, command.kd);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.t_ff); // Default or zero
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.feed_forward_torque); // Default or zero
 }
 
-TEST_CASE("Parse command with invalid format", "[message_parser]")
+TEST_CASE("Parse JSON command with invalid format", "[message_parser]")
 {
-    const char *input = "Invalid_Input_String";
+    const char *input = "Invalid_JSON_String";
     motor_command_t command = {0};
-    parse_command(input, &command);
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
 
     // All values should remain at their initialized state (zero)
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.p_des);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.v_des);
+    TEST_ASSERT_EQUAL_STRING("", special_command); // No special command
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.velocity);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp);
     TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kd);
-    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.t_ff);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.feed_forward_torque);
+}
+
+TEST_CASE("Parse JSON special command", "[message_parser]")
+{
+    const char *input = "{\"command\": \"ENTER_MODE\"}";
+    motor_command_t command = {0};
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
+
+    TEST_ASSERT_EQUAL_STRING("ENTER_MODE", special_command);
+    // Motor command values should remain at default
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.velocity);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.feed_forward_torque);
+}
+
+TEST_CASE("Parse JSON command with extra parameters", "[message_parser]")
+{
+    const char *input = "{\"position\": 1.0, \"velocity\": 2.0, \"kp\": 3.0, \"kd\": 4.0, \"feed_forward_torque\": 5.0, \"extra\": 999}";
+    motor_command_t command = {0};
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
+
+    TEST_ASSERT_EQUAL_STRING("", special_command); // No special command
+    TEST_ASSERT_EQUAL_FLOAT(1.0f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(2.0f, command.velocity);
+    TEST_ASSERT_EQUAL_FLOAT(3.0f, command.kp);
+    TEST_ASSERT_EQUAL_FLOAT(4.0f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(5.0f, command.feed_forward_torque);
+}
+
+TEST_CASE("Parse JSON command with null values", "[message_parser]")
+{
+    const char *input = "{\"position\": null, \"velocity\": null, \"kp\": null, \"kd\": null, \"feed_forward_torque\": null}";
+    motor_command_t command = {0};
+    char special_command[BUF_SIZE] = {0};
+    parse_json_command(input, &command, special_command);
+
+    TEST_ASSERT_EQUAL_STRING("", special_command); // No special command
+    // All values should remain at their initialized state (zero)
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.position);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.velocity);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kp);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.kd);
+    TEST_ASSERT_EQUAL_FLOAT(0.0f, command.feed_forward_torque);
 }
 
 TEST_CASE("float_to_uint standard values", "[message_parser]")
@@ -102,22 +155,22 @@ TEST_CASE("uint_to_float edge values", "[message_parser]")
 
 TEST_CASE("pack_cmd", "[message_parser]")
 {
-    float p_des = 0.0f;
-    float v_des = 0.0f;
+    float position = 0.0f;
+    float velocity = 0.0f;
     float kp = 250.0f;
     float kd = 2.5f;
-    float t_ff = 0.0f;
+    float feed_forward_torque = 0.0f;
     uint8_t msg_data[CAN_CMD_LENGTH] = {0};
 
-    pack_cmd(p_des, v_des, kp, kd, t_ff, msg_data);
+    pack_cmd(position, velocity, kp, kd, feed_forward_torque, msg_data);
 
     /*
-     * Calculations, using the spreadsheet. decimals are truncated when converted to integer:
+     * Calculations, using the spreadsheet. Decimals are truncated when converted to integer:
      *
-     * p_des = 0.0f mapped to 16 bits:
+     * position = 0.0f mapped to 16 bits:
      * float_to_uint(0.0f, -12.5f, 12.5f, 16) =  32767.5 = 32767 = 0x7FFF
      *
-     * v_des = 0.0f mapped to 12 bits:
+     * velocity = 0.0f mapped to 12 bits:
      * float_to_uint(0.0f, -65.0f, 65.0f, 12) = 2047.5 = 2047 = 0x7FF
      *
      * kp = 250.0f mapped to 12 bits:
@@ -126,7 +179,7 @@ TEST_CASE("pack_cmd", "[message_parser]")
      * kd = 2.5f mapped to 12 bits:
      * float_to_uint(2.5f, 0.0f, 5.0f, 12) = 2047.5 = 2047 = 0x7FF
      *
-     * t_ff = 0.0f mapped to 12 bits:
+     * feed_forward_torque = 0.0f mapped to 12 bits:
      * float_to_uint(0.0f, -18.0f, 18.0f, 12) = 2047.5 = 2047 = 0x7FF
      */
 
@@ -145,7 +198,7 @@ TEST_CASE("pack_cmd", "[message_parser]")
     // Verify each byte in the packed CAN message
     for (int i = 0; i < CAN_CMD_LENGTH; i++)
     {
-        TEST_ASSERT_EQUAL_HEX(expected_msg_data[i], msg_data[i]);
+        TEST_ASSERT_EQUAL_HEX8(expected_msg_data[i], msg_data[i]);
     }
 }
 
