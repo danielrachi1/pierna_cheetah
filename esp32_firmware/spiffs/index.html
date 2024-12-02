@@ -1,50 +1,63 @@
 <!DOCTYPE html>
 <html>
-
 <head>
     <title>ESP32 Motor Controller</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="/style.css">
+    <link rel="stylesheet" href="/style.css">
     <script src="/script.js"></script>
 </head>
-
 <body>
     <h1>Motor Controller</h1>
 
     <!-- Command Section -->
-    <div>
+    <section class="command-section">
         <h2>Send Command</h2>
-        <label for="motor_id_command">Motor ID:</label>
-        <input type="number" id="motor_id_command" name="motor_id_command" min="0" max="2047"><br>
+        <div class="form-group">
+            <label for="motor_id_command">Motor ID:</label>
+            <input type="number" id="motor_id_command" name="motor_id_command" min="0" max="2047">
+        </div>
 
-        <label for="position">Position:</label>
-        <input type="number" id="position" name="position"><br>
+        <div class="form-group">
+            <label for="position">Position:</label>
+            <input type="number" id="position" name="position">
+        </div>
 
-        <label for="velocity">Velocity:</label>
-        <input type="number" id="velocity" name="velocity"><br>
+        <div class="form-group">
+            <label for="velocity">Velocity:</label>
+            <input type="number" id="velocity" name="velocity">
+        </div>
 
-        <label for="kp">Kp:</label>
-        <input type="number" id="kp" name="kp"><br>
+        <div class="form-group">
+            <label for="kp">Kp:</label>
+            <input type="number" id="kp" name="kp">
+        </div>
 
-        <label for="kd">Kd:</label>
-        <input type="number" id="kd" name="kd"><br>
+        <div class="form-group">
+            <label for="kd">Kd:</label>
+            <input type="number" id="kd" name="kd">
+        </div>
 
-        <label for="feed_forward_torque">Feed Forward Torque:</label>
-        <input type="number" id="feed_forward_torque" name="feed_forward_torque"><br>
+        <div class="form-group">
+            <label for="feed_forward_torque">Feed Forward Torque:</label>
+            <input type="number" id="feed_forward_torque" name="feed_forward_torque">
+        </div>
 
-        <button onclick="sendCommand()">Send Command</button>
-    </div>
+        <button class="btn" onclick="sendCommand()">Send Command</button>
+    </section>
 
     <!-- Special Commands Section -->
-    <div>
+    <section class="special-commands">
         <h2>Special Commands</h2>
-        <label for="motor_id_special">Motor ID:</label>
-        <input type="number" id="motor_id_special" name="motor_id_special" min="0" max="2047"><br>
+        <div class="form-group">
+            <label for="motor_id_special">Motor ID:</label>
+            <input type="number" id="motor_id_special" name="motor_id_special" min="0" max="2047">
+        </div>
 
-        <button onclick="sendSpecialCommand('ENTER_MODE')">ENTER_MODE</button>
-        <button onclick="sendSpecialCommand('EXIT_MODE')">EXIT_MODE</button>
-        <button onclick="sendSpecialCommand('ZERO_POS')">ZERO_POS</button>
-    </div>
+        <div class="button-group">
+            <button class="btn" onclick="sendSpecialCommand('ENTER_MODE')">Enter Motor Mode</button>
+            <button class="btn" onclick="sendSpecialCommand('EXIT_MODE')">Exit Motor Mode</button>
+            <button class="btn" onclick="sendSpecialCommand('ZERO_POS')">Set Sensor Zero Position</button>
+        </div>
+    </section>
 </body>
-
 </html>
