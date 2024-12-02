@@ -38,14 +38,16 @@ typedef struct
 /**
  * @brief Structure to hold motor command parameters.
  */
-typedef struct
-{
-    float position; /**< Desired position in radians */
-    float velocity; /**< Desired velocity in rad/s */
-    float kp;       /**< Proportional gain */
-    float kd;       /**< Derivative gain */
-    float feed_forward_torque; /**< Feed-forward torque in N-m */
+typedef struct {
+    int motor_id;
+    float position;
+    float velocity;
+    float kp;
+    float kd;
+    float feed_forward_torque;
 } motor_command_t;
+
+
 
 /**
  * @brief Maps a float x in [x_min,x_max] to an unsigned int in [0,2^bits - 1].

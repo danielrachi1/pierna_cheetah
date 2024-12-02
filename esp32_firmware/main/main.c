@@ -31,8 +31,6 @@
 #define TWAI_BIT_RATE TWAI_TIMING_CONFIG_1MBITS()
 #define TWAI_FILTER_CONFIG TWAI_FILTER_CONFIG_ACCEPT_ALL()
 
-#define CAN_ID 0x01
-
 // Wi-Fi Configuration
 #define WIFI_SSID CONFIG_WIFI_SSID
 #define WIFI_PASS CONFIG_WIFI_PASSWORD
@@ -199,20 +197,21 @@ static void twai_init()
  *
  * @param msg_data Pointer to the CAN message data array.
  * @param length   Length of the CAN message data (up to 8 bytes).
+ * @param motor_id The motor ID to which the message is sent.
  * @return esp_err_t ESP_OK on success, otherwise an error code.
  */
-static esp_err_t send_can_message(uint8_t *msg_data, size_t length)
+static esp_err_t send_can_message(uint8_t *msg_data, size_t length, int motor_id)
 {
     twai_message_t message;
     memset(&message, 0, sizeof(twai_message_t));
 
     /* Set message fields */
-    message.identifier = CAN_ID;
+    message.identifier = motor_id;
     message.data_length_code = length;
     memcpy(message.data, msg_data, length);
 
     /* Log the raw TWAI message before sending */
-    ESP_LOGI(LOG_TAG, "Sending TWAI Message:");
+    ESP_LOGI(LOG_TAG, "Sending TWAI Message to Motor ID %d:", motor_id);
     ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message.identifier);
     ESP_LOGI(LOG_TAG, "  Data Length: %d", message.data_length_code);
     ESP_LOG_BUFFER_HEX(LOG_TAG, message.data, message.data_length_code);
@@ -249,7 +248,6 @@ static esp_err_t receive_can_message(twai_message_t *message)
         ESP_LOGI(LOG_TAG, "  Data Length: %d", message->data_length_code);
         ESP_LOG_BUFFER_HEX(LOG_TAG, message->data, message->data_length_code);
 
-        /* Process received message if needed */
     }
     else if (err != ESP_ERR_TIMEOUT)
     {
@@ -265,10 +263,10 @@ static esp_err_t receive_can_message(twai_message_t *message)
  *
  * @return esp_err_t ESP_OK on success, otherwise an error code.
  */
-static esp_err_t send_enter_motor_mode()
+static esp_err_t send_enter_motor_mode(int motor_id)
 {
-    ESP_LOGI(LOG_TAG, "Sending Enter Motor Mode command");
-    return send_can_message((uint8_t *)ENTER_MOTOR_MODE_CMD, DATA_LENGTH);
+    ESP_LOGI(LOG_TAG, "Sending Enter Motor Mode command to Motor ID %d", motor_id);
+    return send_can_message((uint8_t *)ENTER_MOTOR_MODE_CMD, DATA_LENGTH, motor_id);
 }
 
 /**
@@ -276,10 +274,10 @@ static esp_err_t send_enter_motor_mode()
  *
  * @return esp_err_t ESP_OK on success, otherwise an error code.
  */
-static esp_err_t send_exit_motor_mode()
+static esp_err_t send_exit_motor_mode(int motor_id)
 {
-    ESP_LOGI(LOG_TAG, "Sending Exit Motor Mode command");
-    return send_can_message((uint8_t *)EXIT_MOTOR_MODE_CMD, DATA_LENGTH);
+    ESP_LOGI(LOG_TAG, "Sending Exit Motor Mode command to Motor ID %d", motor_id);
+    return send_can_message((uint8_t *)EXIT_MOTOR_MODE_CMD, DATA_LENGTH, motor_id);
 }
 
 /**
@@ -287,10 +285,10 @@ static esp_err_t send_exit_motor_mode()
  *
  * @return esp_err_t ESP_OK on success, otherwise an error code.
  */
-static esp_err_t send_zero_position_sensor()
+static esp_err_t send_zero_position_sensor(int motor_id)
 {
-    ESP_LOGI(LOG_TAG, "Sending Zero Position Sensor command");
-    return send_can_message((uint8_t *)ZERO_POS_SENSOR_CMD, DATA_LENGTH);
+    ESP_LOGI(LOG_TAG, "Sending Zero Position Sensor command to Motor ID %d", motor_id);
+    return send_can_message((uint8_t *)ZERO_POS_SENSOR_CMD, DATA_LENGTH, motor_id);
 }
 
 /**
@@ -498,7 +496,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         /* Process special command */
         if (strcmp(special_command, "ENTER_MODE") == 0)
         {
-            if (send_enter_motor_mode() == ESP_OK)
+            if (send_enter_motor_mode(command.motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Enter Motor Mode command sent successfully");
             }
@@ -509,7 +507,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         }
         else if (strcmp(special_command, "EXIT_MODE") == 0)
         {
-            if (send_exit_motor_mode() == ESP_OK)
+            if (send_exit_motor_mode(command.motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
             }
@@ -520,7 +518,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         }
         else if (strcmp(special_command, "ZERO_POS") == 0)
         {
-            if (send_zero_position_sensor() == ESP_OK)
+            if (send_zero_position_sensor(command.motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
             }
@@ -550,9 +548,9 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
 
         /* Send the CAN message via TWAI */
-        if (send_can_message(can_msg_data, CAN_CMD_LENGTH) == ESP_OK)
+        if (send_can_message(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
         {
-            ESP_LOGI(LOG_TAG, "CAN message sent successfully");
+            ESP_LOGI(LOG_TAG, "CAN message sent successfully to Motor ID %d", command.motor_id);
         }
         else
         {

@@ -113,46 +113,64 @@ bool parse_json_command(const char *json_string, motor_command_t *command_struct
         return false;
     }
 
+    // Initialize special_command to an empty string
+    special_command[0] = '\0'; // No special command by default
+
+    // Parse motor_id
+    cJSON *motor_id_item = cJSON_GetObjectItem(json, "motor_id");
+    if (cJSON_IsNumber(motor_id_item))
+    {
+        command_struct->motor_id = motor_id_item->valueint;
+    }
+    // If motor_id is missing, it remains at its initialized value (e.g., 0)
+
+    // Parse special_command
     cJSON *command_item = cJSON_GetObjectItem(json, "command");
     if (cJSON_IsString(command_item) && (command_item->valuestring != NULL))
     {
         strncpy(special_command, command_item->valuestring, BUF_SIZE - 1);
         special_command[BUF_SIZE - 1] = '\0';
     }
-    else
-    {
-        special_command[0] = '\0'; // No special command
-    }
 
-    cJSON *p_des_item = cJSON_GetObjectItem(json, "position");
-    if (cJSON_IsNumber(p_des_item))
+    // Parse position
+    cJSON *position_item = cJSON_GetObjectItem(json, "position");
+    if (cJSON_IsNumber(position_item))
     {
-        command_struct->position = p_des_item->valuedouble;
+        command_struct->position = (float)position_item->valuedouble;
     }
+    // If position is missing, it remains at its initialized value (e.g., 0.0f)
 
-    cJSON *v_des_item = cJSON_GetObjectItem(json, "velocity");
-    if (cJSON_IsNumber(v_des_item))
+    // Parse velocity
+    cJSON *velocity_item = cJSON_GetObjectItem(json, "velocity");
+    if (cJSON_IsNumber(velocity_item))
     {
-        command_struct->velocity = v_des_item->valuedouble;
+        command_struct->velocity = (float)velocity_item->valuedouble;
     }
+    // If velocity is missing, it remains at its initialized value (e.g., 0.0f)
 
+    // Parse kp
     cJSON *kp_item = cJSON_GetObjectItem(json, "kp");
     if (cJSON_IsNumber(kp_item))
     {
-        command_struct->kp = kp_item->valuedouble;
+        command_struct->kp = (float)kp_item->valuedouble;
     }
+    // If kp is missing, it remains at its initialized value (e.g., 0.0f)
 
+    // Parse kd
     cJSON *kd_item = cJSON_GetObjectItem(json, "kd");
     if (cJSON_IsNumber(kd_item))
     {
-        command_struct->kd = kd_item->valuedouble;
+        command_struct->kd = (float)kd_item->valuedouble;
     }
+    // If kd is missing, it remains at its initialized value (e.g., 0.0f)
 
+    // Parse feed_forward_torque
     cJSON *t_ff_item = cJSON_GetObjectItem(json, "feed_forward_torque");
     if (cJSON_IsNumber(t_ff_item))
     {
-        command_struct->feed_forward_torque = t_ff_item->valuedouble;
+        command_struct->feed_forward_torque = (float)t_ff_item->valuedouble;
     }
+    // If feed_forward_torque is missing, it remains at its initialized value (e.g., 0.0f)
 
     cJSON_Delete(json);
     return true;

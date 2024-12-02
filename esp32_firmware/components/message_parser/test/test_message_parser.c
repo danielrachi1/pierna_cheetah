@@ -3,7 +3,7 @@
 
 TEST_CASE("Parse JSON command with valid input", "[message_parser]")
 {
-    const char *input = "{\"position\": 1.2345, \"velocity\": 2.3456, \"kp\": 3.4567, \"kd\": 4.5678, \"feed_forward_torque\": 5.6789}";
+    const char *input = "{\"motor_id\": 1, \"position\": 1.2345, \"velocity\": 2.3456, \"kp\": 3.4567, \"kd\": 4.5678, \"feed_forward_torque\": 5.6789}";
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
     parse_json_command(input, &command, special_command);
@@ -18,7 +18,7 @@ TEST_CASE("Parse JSON command with valid input", "[message_parser]")
 
 TEST_CASE("Parse JSON command with missing parameters", "[message_parser]")
 {
-    const char *input = "{\"position\": 1.0, \"velocity\": 2.0, \"kd\": 0.5}";
+    const char *input = "{\"motor_id\": 1, \"position\": 1.0, \"velocity\": 2.0, \"kd\": 0.5}";
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
     parse_json_command(input, &command, special_command);
@@ -49,7 +49,7 @@ TEST_CASE("Parse JSON command with invalid format", "[message_parser]")
 
 TEST_CASE("Parse JSON special command", "[message_parser]")
 {
-    const char *input = "{\"command\": \"ENTER_MODE\"}";
+    const char *input = "{\"motor_id\": 1, \"command\": \"ENTER_MODE\"}";
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
     parse_json_command(input, &command, special_command);
@@ -65,7 +65,7 @@ TEST_CASE("Parse JSON special command", "[message_parser]")
 
 TEST_CASE("Parse JSON command with extra parameters", "[message_parser]")
 {
-    const char *input = "{\"position\": 1.0, \"velocity\": 2.0, \"kp\": 3.0, \"kd\": 4.0, \"feed_forward_torque\": 5.0, \"extra\": 999}";
+    const char *input = "{\"motor_id\": 1, \"position\": 1.0, \"velocity\": 2.0, \"kp\": 3.0, \"kd\": 4.0, \"feed_forward_torque\": 5.0, \"extra\": 999}";
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
     parse_json_command(input, &command, special_command);
@@ -80,7 +80,7 @@ TEST_CASE("Parse JSON command with extra parameters", "[message_parser]")
 
 TEST_CASE("Parse JSON command with null values", "[message_parser]")
 {
-    const char *input = "{\"position\": null, \"velocity\": null, \"kp\": null, \"kd\": null, \"feed_forward_torque\": null}";
+    const char *input = "{\"motor_id\": 1, \"position\": null, \"velocity\": null, \"kp\": null, \"kd\": null, \"feed_forward_torque\": null}";
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
     parse_json_command(input, &command, special_command);
