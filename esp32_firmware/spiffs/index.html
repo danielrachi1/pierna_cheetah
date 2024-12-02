@@ -1,45 +1,104 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+
 <head>
+    <meta charset="UTF-8">
     <title>ESP32 Motor Controller</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/style.css">
-    <script src="/script.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Link to the external JavaScript file -->
+    <script src="script.js" defer></script>
 </head>
+
 <body>
     <h1>Motor Controller</h1>
+
+    <!-- Notification Container -->
+    <div id="notification" class="hidden"></div>
 
     <!-- Command Section -->
     <section class="command-section">
         <h2>Send Command</h2>
         <div class="form-group">
-            <label for="motor_id_command">Motor ID:</label>
-            <input type="number" id="motor_id_command" name="motor_id_command" min="0" max="2047">
+            <label for="motor_id_command" class="field-label">Motor ID</label>
+            <select id="motor_id_command" name="motor_id_command" required>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+            </select>
         </div>
 
-        <div class="form-group">
-            <label for="position">Position:</label>
-            <input type="number" id="position" name="position">
-        </div>
+        <div class="sliders-container">
+            <!-- Slider for Position -->
+            <div class="slider-wrapper">
+                <label for="position_slider" class="slider-label">Position</label>
+                <div class="slider-container">
+                    <input type="range" id="position_slider" name="position_slider" min="0" max="360" step="0.1" value="0"
+                        oninput="updatePositionInput()" class="vertical-slider">
+                </div>
+                <div class="slider-value">
+                    <input type="number" id="position" name="position" min="0" max="360" step="0.1" value="0"
+                        oninput="updatePositionSlider()" required>
+                    <span class="unit">°</span>
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label for="velocity">Velocity:</label>
-            <input type="number" id="velocity" name="velocity">
-        </div>
+            <!-- Slider for Velocity -->
+            <div class="slider-wrapper">
+                <label for="velocity_slider" class="slider-label">Velocity</label>
+                <div class="slider-container">
+                    <input type="range" id="velocity_slider" name="velocity_slider" min="-180" max="180" step="0.1" value="0"
+                        oninput="updateVelocityInput()" class="vertical-slider">
+                </div>
+                <div class="slider-value">
+                    <input type="number" id="velocity" name="velocity" min="-180" max="180" step="0.1" value="0"
+                        oninput="updateVelocitySlider()" required>
+                    <span class="unit">°/s</span>
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label for="kp">Kp:</label>
-            <input type="number" id="kp" name="kp">
-        </div>
+            <!-- Slider for Kp -->
+            <div class="slider-wrapper">
+                <label for="kp_slider" class="slider-label">Kp</label>
+                <div class="slider-container">
+                    <input type="range" id="kp_slider" name="kp_slider" min="0" max="500" step="0.1" value="0"
+                        oninput="updateKpInput()" class="vertical-slider">
+                </div>
+                <div class="slider-value">
+                    <input type="number" id="kp" name="kp" min="0" max="500" step="0.1" value="0"
+                        oninput="updateKpSlider()" required>
+                    <span class="unit">N·m/rad</span>
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label for="kd">Kd:</label>
-            <input type="number" id="kd" name="kd">
-        </div>
+            <!-- Slider for Kd -->
+            <div class="slider-wrapper">
+                <label for="kd_slider" class="slider-label">Kd</label>
+                <div class="slider-container">
+                    <input type="range" id="kd_slider" name="kd_slider" min="0" max="5" step="0.01" value="0"
+                        oninput="updateKdInput()" class="vertical-slider">
+                </div>
+                <div class="slider-value">
+                    <input type="number" id="kd" name="kd" min="0" max="5" step="0.01" value="0"
+                        oninput="updateKdSlider()" required>
+                    <span class="unit">N·m·s/rad</span>
+                </div>
+            </div>
 
-        <div class="form-group">
-            <label for="feed_forward_torque">Feed Forward Torque:</label>
-            <input type="number" id="feed_forward_torque" name="feed_forward_torque">
+            <!-- Slider for Feed Forward Torque -->
+            <div class="slider-wrapper">
+                <label for="feed_forward_torque_slider" class="slider-label">Torque</label>
+                <div class="slider-container">
+                    <input type="range" id="feed_forward_torque_slider" name="feed_forward_torque_slider" min="-18" max="18"
+                        step="0.1" value="0" oninput="updateTorqueInput()" class="vertical-slider">
+                </div>
+                <div class="slider-value">
+                    <input type="number" id="feed_forward_torque" name="feed_forward_torque" min="-18" max="18" step="0.1"
+                        value="0" oninput="updateTorqueSlider()" required>
+                    <span class="unit">N·m</span>
+                </div>
+            </div>
         </div>
 
         <button class="btn" onclick="sendCommand()">Send Command</button>
@@ -49,8 +108,12 @@
     <section class="special-commands">
         <h2>Special Commands</h2>
         <div class="form-group">
-            <label for="motor_id_special">Motor ID:</label>
-            <input type="number" id="motor_id_special" name="motor_id_special" min="0" max="2047">
+            <label for="motor_id_special" class="field-label">Motor ID</label>
+            <select id="motor_id_special" name="motor_id_special" required>
+                <option value="1">1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+            </select>
         </div>
 
         <div class="button-group">
@@ -60,4 +123,5 @@
         </div>
     </section>
 </body>
+
 </html>
