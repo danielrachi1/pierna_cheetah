@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>ESP32 Motor Controller</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="/style.css">
+    <script src="/script.js"></script>
+</head>
+
+<body>
+    <h1>Motor Controller</h1>
+
+    <!-- Command Section -->
+    <div>
+        <h2>Send Command</h2>
+        <label for="motor_id_command">Motor ID:</label>
+        <input type="number" id="motor_id_command" name="motor_id_command" min="0" max="2047"><br>
+
+        <label for="position">Position:</label>
+        <input type="number" id="position" name="position"><br>
+
+        <label for="velocity">Velocity:</label>
+        <input type="number" id="velocity" name="velocity"><br>
+
+        <label for="kp">Kp:</label>
+        <input type="number" id="kp" name="kp"><br>
+
+        <label for="kd">Kd:</label>
+        <input type="number" id="kd" name="kd"><br>
+
+        <label for="feed_forward_torque">Feed Forward Torque:</label>
+        <input type="number" id="feed_forward_torque" name="feed_forward_torque"><br>
+
+        <button onclick="sendCommand()">Send Command</button>
+    </div>
+
+    <!-- Special Commands Section -->
+    <div>
+        <h2>Special Commands</h2>
+        <label for="motor_id_special">Motor ID:</label>
+        <input type="number" id="motor_id_special" name="motor_id_special" min="0" max="2047"><br>
+
+        <button onclick="sendSpecialCommand('ENTER_MODE')">ENTER_MODE</button>
+        <button onclick="sendSpecialCommand('EXIT_MODE')">EXIT_MODE</button>
+        <button onclick="sendSpecialCommand('ZERO_POS')">ZERO_POS</button>
+    </div>
+</body>
+
+</html>

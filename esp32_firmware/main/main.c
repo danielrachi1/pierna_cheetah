@@ -16,6 +16,7 @@
 #include "esp_http_server.h" // For HTTP server functions
 #include "lwip/err.h"
 #include "lwip/sys.h"
+#include "esp_spiffs.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 
@@ -43,6 +44,8 @@ static EventGroupHandle_t s_wifi_event_group;
 /* Event group bits */
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
+
+#define FILEPATH_MAX 520
 
 static int s_retry_num = 0;
 
@@ -340,127 +343,106 @@ static void can_receive_task(void *arg)
     vTaskDelete(NULL);
 }
 
-/* HTML page to be served */
-const char *html_page = "<!DOCTYPE html>\
-<html>\
-<head>\
-    <title>ESP32 Motor Controller</title>\
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
-    <style>\
-        body {\
-            font-family: Arial, sans-serif;\
-            margin: 20px;\
-        }\
-        h1, h2 {\
-            color: #333;\
-        }\
-        label {\
-            display: inline-block;\
-            width: 150px;\
-            margin-top: 10px;\
-        }\
-        input[type=\"number\"] {\
-            width: 200px;\
-            padding: 5px;\
-            margin-top: 10px;\
-        }\
-        button {\
-            padding: 10px 20px;\
-            margin-top: 20px;\
-            background-color: #4CAF50;\
-            color: white;\
-            border: none;\
-            cursor: pointer;\
-            font-size: 16px;\
-        }\
-        button:hover {\
-            background-color: #45a049;\
-        }\
-        .command-section, .special-commands-section {\
-            margin-bottom: 40px;\
-        }\
-    </style>\
-</head>\
-<body>\
-    <h1>Motor Controller</h1>\
-    \
-    <!-- Command Section -->\
-    <div class=\"command-section\">\
-        <h2>Send Command</h2>\
-        <label for=\"position\">Position:</label>\
-        <input type=\"number\" id=\"position\" name=\"position\"><br>\
-        \
-        <label for=\"velocity\">Velocity:</label>\
-        <input type=\"number\" id=\"velocity\" name=\"velocity\"><br>\
-        \
-        <label for=\"kp\">Kp:</label>\
-        <input type=\"number\" id=\"kp\" name=\"kp\"><br>\
-        \
-        <label for=\"kd\">Kd:</label>\
-        <input type=\"number\" id=\"kd\" name=\"kd\"><br>\
-        \
-        <label for=\"feed_forward_torque\">Feed Forward Torque:</label>\
-        <input type=\"number\" id=\"feed_forward_torque\" name=\"feed_forward_torque\"><br>\
-        \
-        <button onclick=\"sendCommand()\">Send Command</button>\
-    </div>\
-    \
-    <!-- Special Commands Section -->\
-    <div class=\"special-commands-section\">\
-        <h2>Special Commands</h2>\
-        <button onclick=\"sendSpecialCommand('ENTER_MODE')\">ENTER_MODE</button>\
-        <button onclick=\"sendSpecialCommand('EXIT_MODE')\">EXIT_MODE</button>\
-        <button onclick=\"sendSpecialCommand('ZERO_POS')\">ZERO_POS</button>\
-    </div>\
-    \
-    <script>\
-        function sendCommand() {\
-            var position = parseFloat(document.getElementById('position').value);\
-            var velocity = parseFloat(document.getElementById('velocity').value);\
-            var kp = parseFloat(document.getElementById('kp').value);\
-            var kd = parseFloat(document.getElementById('kd').value);\
-            var feed_forward_torque = parseFloat(document.getElementById('feed_forward_torque').value);\
-            \
-            var command = {\
-                \"position\": position,\
-                \"velocity\": velocity,\
-                \"kp\": kp,\
-                \"kd\": kd,\
-                \"feed_forward_torque\": feed_forward_torque\
-            };\
-            \
-            fetch('/send_command', {\
-                method: 'POST',\
-                headers: { 'Content-Type': 'application/json' },\
-                body: JSON.stringify(command)\
-            })\
-            .then(response => response.text())\
-            .then(data => alert(data))\
-            .catch(error => console.error('Error:', error));\
-        }\
-        \
-        function sendSpecialCommand(commandName) {\
-            var command = { \"command\": commandName };\
-            \
-            fetch('/send_command', {\
-                method: 'POST',\
-                headers: { 'Content-Type': 'application/json' },\
-                body: JSON.stringify(command)\
-            })\
-            .then(response => response.text())\
-            .then(data => alert(data))\
-            .catch(error => console.error('Error:', error));\
-        }\
-    </script>\
-</body>\
-</html>";
-
 /**
  * @brief HTTP GET handler to serve the main page.
  */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    httpd_resp_send(req, html_page, HTTPD_RESP_USE_STRLEN);
+    // Open the index.html file from SPIFFS
+    FILE *f = fopen("/spiffs/index.html", "r");
+    if (f == NULL)
+    {
+        ESP_LOGE(LOG_TAG, "Failed to open index.html");
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    // Set the Content-Type header
+    httpd_resp_set_type(req, "text/html");
+
+    // Read and send the file in chunks
+    char buffer[512];
+    size_t read_bytes;
+    do
+    {
+        read_bytes = fread(buffer, 1, sizeof(buffer), f);
+        if (read_bytes > 0)
+        {
+            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
+            {
+                fclose(f);
+                ESP_LOGE(LOG_TAG, "File sending failed!");
+                httpd_resp_sendstr_chunk(req, NULL); // Terminate chunked response
+                httpd_resp_send_500(req);
+                return ESP_FAIL;
+            }
+        }
+    } while (read_bytes > 0);
+
+    // Close the file
+    fclose(f);
+
+    // Indicate that the entire chunked response is complete
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+static esp_err_t file_get_handler(httpd_req_t *req)
+{
+    char filepath[FILEPATH_MAX];
+    snprintf(filepath, sizeof(filepath), "/spiffs%s", req->uri);
+
+    // Open the requested file
+    FILE *f = fopen(filepath, "r");
+    if (f == NULL)
+    {
+        ESP_LOGE(LOG_TAG, "Failed to open file : %s", filepath);
+        httpd_resp_send_404(req);
+        return ESP_FAIL;
+    }
+
+    // Determine content type
+    const char *type = "text/plain";
+    if (strstr(req->uri, ".css"))
+    {
+        type = "text/css";
+    }
+    else if (strstr(req->uri, ".js"))
+    {
+        type = "application/javascript";
+    }
+    else if (strstr(req->uri, ".html"))
+    {
+        type = "text/html";
+    }
+
+    // Set the Content-Type header
+    httpd_resp_set_type(req, type);
+
+    // Read and send the file in chunks
+    char buffer[512];
+    size_t read_bytes;
+    do
+    {
+        read_bytes = fread(buffer, 1, sizeof(buffer), f);
+        if (read_bytes > 0)
+        {
+            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
+            {
+                fclose(f);
+                ESP_LOGE(LOG_TAG, "File sending failed!");
+                httpd_resp_sendstr_chunk(req, NULL); // Terminate chunked response
+                httpd_resp_send_500(req);
+                return ESP_FAIL;
+            }
+        }
+    } while (read_bytes > 0);
+
+    // Close the file
+    fclose(f);
+
+    // Indicate that the entire chunked response is complete
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -597,6 +579,11 @@ httpd_uri_t uri_send_command = {
     .method = HTTP_POST,
     .handler = send_command_post_handler,
     .user_ctx = NULL};
+httpd_uri_t file_uri = {
+    .uri = "/*", // Match all URIs
+    .method = HTTP_GET,
+    .handler = file_get_handler,
+    .user_ctx = NULL};
 
 /**
  * @brief Starts the web server.
@@ -607,13 +594,17 @@ static httpd_handle_t start_webserver(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 
+    /* Enable wildcard URI matching */
+    config.uri_match_fn = httpd_uri_match_wildcard;
+
     /* Start the HTTP server */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) == ESP_OK)
     {
         /* Register URI handlers */
-        httpd_register_uri_handler(server, &uri_root);
-        httpd_register_uri_handler(server, &uri_send_command);
+        httpd_register_uri_handler(server, &uri_root);         // Handler for "/"
+        httpd_register_uri_handler(server, &uri_send_command); // Handler for "/send_command"
+        httpd_register_uri_handler(server, &file_uri);         // Handler for all other URIs (static files)
         return server;
     }
 
@@ -638,6 +629,20 @@ void app_main(void)
 
     /* Initialize Wi-Fi */
     connect_wifi();
+
+    /* Initialize SPIFFS */
+    esp_vfs_spiffs_conf_t conf = {
+        .base_path = "/spiffs",
+        .partition_label = NULL,
+        .max_files = 5,
+        .format_if_mount_failed = true};
+    ret = esp_vfs_spiffs_register(&conf);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
+        return;
+    }
+    ESP_LOGI(LOG_TAG, "SPIFFS mounted successfully");
 
     /* Initialize TWAI (CAN) driver */
     twai_init();
