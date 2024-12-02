@@ -258,3 +258,14 @@ El sistema contará con una interfaz gráfica de usuario (GUI) basada en la web,
 Además, integraré un controlador físico conectado al ESP32 mediante Bluetooth. Esta configuración permite el control manual directo del robot, proporcionando una alternativa al control basado en la web. El ESP32 procesará las entradas tanto de la GUI como del controlador físico, traduciéndolas en comandos precisos para los motores que controlan los movimientos del robot. Esta doble interfaz ofrece flexibilidad, permitiendo al usuario elegir entre el control remoto a través de la interfaz web o el control directo mediante el controlador físico, según las necesidades específicas de cada situación.
 
 Escribí una buena parte del firmware para hacer esto. En este momento se pueden enviar comandos desde una página web, hacer el parsing, y enviarlos al motor via CAN.
+
+Es importante recordar que para que la ESP32 se conecte al WiFi, se deben asignar las credenciales en menuconfig.
+
+### 2024-12-02
+
+No estoy satisfecho con la UI actual. Para mejorarla empezaré por separar el código HTML/CSS/JS del archivo `main.c`. Esto me permitirá poder hacer modificaciones más modulares. Para esto usaré spiffs.
+
+Para que spiffs funcione, es necesario (además de ajustar el código del proyecto):
+1. Crear un archivo `partitions.csv` en la carpeta root del proyecto.
+2. En menuconfig, indicar que se debe usar el archivo .csv para indicar las particiones.
+3. Cambiar el flash size a 4 MB (en menuconfig).
