@@ -269,3 +269,42 @@ Para que spiffs funcione, es necesario (además de ajustar el código del proyec
 1. Crear un archivo `partitions.csv` en la carpeta root del proyecto.
 2. En menuconfig, indicar que se debe usar el archivo .csv para indicar las particiones.
 3. Cambiar el flash size a 4 MB (en menuconfig).
+
+
+### 2024-12-03
+
+En el laboratorio, con la ESP32 conectada al motor 1, realicé algunas pruebas para 1) verificar que mi firmware esté funcionando bien y 2) encontrar valores adecuados para las ganacias del control.
+
+Verifiqué que el firmware de la ESP32 funciona bien. Puedo acceder la página, enviar comandos, los comandos se traducen y se envían por CAN, y puedo leer los mensajes de respuesta del motor.
+
+Sin embargo, el control no parece estar funcionando bien. Parece haber algún error en la conversión, no sé en que parte. Cuando envío 11 grados, se va a 90, cuando envío 22, va a aprox 160; 33 unos 300. Si lo envío a 90 da varias vueltas.
+
+Creo que el error está en las definiciones de los rangos. En `components/message_parser/include/message_parser.h` están definidos segun [este archivo](https://os.mbed.com/users/benkatz/code/HKC_MiniCheetah//file/fe5056ac6740/CAN/CAN_com.cpp/). En la [documentación del motor drive](https://docs.google.com/document/d/1dzNVzblz6mqB3eZVEMyi2MtSngALHdgpTaDJIW_BpS4/edit?tab=t.0) revisé todos los links de repositorios intentando buscar otros valores para estos límites.
+
+En [este archivo](https://os.mbed.com/users/benkatz/code/CanMaster//file/107df25e1eef/main.cpp/), encontré:
+
+```
+#define P_MIN -95.5f
+ #define P_MAX 95.5f
+ #define V_MIN -45.0f
+ #define V_MAX 45.0f
+ #define KP_MIN 0.0f
+ #define KP_MAX 500.0f
+ #define KD_MIN 0.0f
+ #define KD_MAX 5.0f
+ #define I_MIN -18.0f
+ #define I_MAX 18.0f
+ ```
+
+ A primera vista, estos valores me podrían servir, los límites de posición son mayores a los que tengo actualmente, lo que indica que los valores se podrían ajustar cómo los necesito (en este momento valores pequeños causan angulos grandes, si tengo límites más grandes, los mismos valores causarán angulos más pequeños).
+
+ Estos valores arreglaron el problema.
+
+ Ahora que puedo mover el motor a algunas posiciones, voy a encontrar valores para velocidad, kp, kd y torque feed forward.
+
+ - Velocidad: Este valor no es la velocidad que tomará el motor para llegar a la posición deseada. Es para hacer control de velocidad. Usaré 0 siempre.
+ - Kp: 10
+ - Kd: 5
+  - Feed-forward torque: considero que es adecuado dejar este valor en 0, por ahora.
+
+Necesito encontrar alguna manera de hacer que tenga un arranque más suave.
