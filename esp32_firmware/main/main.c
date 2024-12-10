@@ -28,7 +28,7 @@
 // TWAI (CAN) Configuration
 #define TWAI_TX_GPIO_NUM (21)
 #define TWAI_RX_GPIO_NUM (22)
-#define TWAI_MODE TWAI_MODE_NORMAL // Set to normal mode for actual CAN communication; no ack for testing
+#define TWAI_MODE TWAI_MODE_NO_ACK // no ack for testing; switch to TWAI_MODE_NORMAL for actual CAN
 #define TWAI_BIT_RATE TWAI_TIMING_CONFIG_1MBITS()
 #define TWAI_FILTER_CONFIG TWAI_FILTER_CONFIG_ACCEPT_ALL()
 
@@ -42,6 +42,20 @@
 #define WIFI_FAIL_BIT BIT1
 
 #define FILEPATH_MAX 520
+
+/* Define ranges for position, velocity, etc. */
+#define P_MIN -95.5f
+#define P_MAX 95.5f
+#define V_MIN -45.0f
+#define V_MAX 45.0f
+#define KP_MIN 0.0f
+#define KP_MAX 500.0f
+#define KD_MIN 0.0f
+#define KD_MAX 5.0f
+#define I_MIN -18.0f
+#define I_MAX 18.0f
+#define T_MIN -18.0f
+#define T_MAX 18.0f
 
 #define KP 0
 #define KD 0
@@ -136,9 +150,6 @@ static void connect_wifi(void)
         .sta = {
             .ssid = WIFI_SSID,
             .password = WIFI_PASS,
-            /* Setting a password implies station will connect to all security modes including WEP/WPA.
-             * However these modes are deprecated and not advisable to be used. Incase your Access point
-             * doesn't support WPA2, these mode can be enabled by commenting below line */
             .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
@@ -354,6 +365,35 @@ static void can_receive_task(void *arg)
 }
 
 /**
+ * @brief Logs the entire trajectory in a single line CSV format.
+ */
+static void log_trajectory_csv(motion_profile_point_t *trajectory, int num_points)
+{
+    // We'll build a single string and log once.
+    // Format: "index,position,velocity,acceleration;index,position,..."
+    // This could be large; be mindful of potential log truncation.
+    // We'll assume the trajectory is not huge. For very large trajectories,
+    // consider streaming in chunks.
+    char *csv_buffer = malloc(num_points * 80); // Rough estimate: 80 chars per point
+    if (!csv_buffer) {
+        ESP_LOGE(LOG_TAG, "Failed to allocate memory for CSV buffer");
+        return;
+    }
+
+    csv_buffer[0] = '\0';
+    for (int i = 0; i < num_points; i++) {
+        char line[80];
+        snprintf(line, sizeof(line), "%d,%.6f,%.6f,%.6f%s",
+                 i, trajectory[i].position, trajectory[i].velocity, trajectory[i].acceleration,
+                 (i == num_points - 1) ? "" : ";");
+        strcat(csv_buffer, line);
+    }
+
+    ESP_LOGI(LOG_TAG, "Trajectory CSV: index,position,velocity,acceleration; %s", csv_buffer);
+    free(csv_buffer);
+}
+
+/**
  * @brief HTTP GET handler to serve the main page.
  */
 static esp_err_t root_get_handler(httpd_req_t *req)
@@ -503,7 +543,10 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         free(buf);
         return ESP_FAIL;
     }
-    else if (strlen(special_command) > 0)
+
+    free(buf);
+
+    if (strlen(special_command) > 0)
     {
         /* Process special command */
         if (strcmp(special_command, "ENTER_MODE") == 0)
@@ -539,51 +582,63 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
                 ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
             }
         }
-        else
-        {
-            ESP_LOGW(LOG_TAG, "Unknown special command: %s", special_command);
-        }
     }
     else
     {
-        // Process regular motor command
-        ESP_LOGI(LOG_TAG, "Parsed Command Data:");
-        ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
-        ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command.velocity);
-        ESP_LOGI(LOG_TAG, "  Proportional Gain (kp): %.4f N-m/rad", command.kp);
-        ESP_LOGI(LOG_TAG, "  Derivative Gain (kd): %.4f N-m*s/rad", command.kd);
-        ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
+        // Determine if it's a simple position-only request or an advanced command
+        bool position_only = (command.velocity == 0.0f && command.kp == 0.0f && command.kd == 0.0f && command.feed_forward_torque == 0.0f);
 
-        // For simplicity, let's assume we want to move from current_motor_position with start_vel=0 to
-        // command.position with end_vel=0 using an s-curve profile.
-        // We'll ignore kp, kd, and feed_forward_torque for the trajectory generation itself,
-        // but we'll still send them with each setpoint if needed.
-        if (current_trajectory)
+        if (position_only)
         {
-            motion_profile_free_trajectory(current_trajectory);
-            current_trajectory = NULL;
-            current_trajectory_points = 0;
-            current_trajectory_index = 0;
-            trajectory_active = false;
-        }
+            // Position-only command: generate s-curve trajectory
+            if (current_trajectory)
+            {
+                motion_profile_free_trajectory(current_trajectory);
+                current_trajectory = NULL;
+                current_trajectory_points = 0;
+                current_trajectory_index = 0;
+                trajectory_active = false;
+            }
 
-        // Generate s-curve trajectory
-        if (motion_profile_generate_s_curve(
-                current_motor_position, 0.0f, command.position, 0.0f,
-                MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
-                &current_trajectory, &current_trajectory_points))
-        {
-            ESP_LOGI(LOG_TAG, "S-curve trajectory generated with %d points", current_trajectory_points);
-            trajectory_active = true;
-            current_trajectory_index = 0;
+            if (motion_profile_generate_s_curve(
+                    current_motor_position, 0.0f, command.position, 0.0f,
+                    MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
+                    &current_trajectory, &current_trajectory_points))
+            {
+                ESP_LOGI(LOG_TAG, "S-curve trajectory generated with %d points", current_trajectory_points);
+                log_trajectory_csv(current_trajectory, current_trajectory_points);
+                trajectory_active = true;
+                current_trajectory_index = 0;
+            }
+            else
+            {
+                ESP_LOGE(LOG_TAG, "Failed to generate s-curve trajectory");
+            }
         }
         else
         {
-            ESP_LOGE(LOG_TAG, "Failed to generate s-curve trajectory");
+            // Advanced command: send one direct CAN message with the provided parameters
+            ESP_LOGW(LOG_TAG, "WARNING: Advanced command used. This can be dangerous!");
+            ESP_LOGI(LOG_TAG, "Parsed Command Data:");
+            ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
+            ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command.velocity);
+            ESP_LOGI(LOG_TAG, "  Proportional Gain (kp): %.4f N-m/rad", command.kp);
+            ESP_LOGI(LOG_TAG, "  Derivative Gain (kd): %.4f N-m*s/rad", command.kd);
+            ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
+
+            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0}; // 8-byte CAN message buffer
+            pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
+
+            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
+            {
+                ESP_LOGI(LOG_TAG, "Direct CAN message sent successfully to Motor ID %d", command.motor_id);
+            }
+            else
+            {
+                ESP_LOGE(LOG_TAG, "Failed to send direct CAN message");
+            }
         }
     }
-
-    free(buf);
 
     /* Send a response back to the client */
     httpd_resp_send(req, "Command received", HTTPD_RESP_USE_STRLEN);
@@ -635,7 +690,7 @@ static httpd_handle_t start_webserver(void)
     return NULL;
 }
 
-// This is just an example. You could create a separate task for this.
+// Motion control task remains unchanged
 static void motion_control_task(void *arg)
 {
     // Suppose we run at 100 Hz (time step = 0.01 s)
@@ -646,18 +701,10 @@ static void motion_control_task(void *arg)
         {
             motion_profile_point_t *pt = &current_trajectory[current_trajectory_index];
 
-            // Use pack_cmd to convert position/velocity to CAN frame.
-            // You might set kp, kd, and torque here as well. For now, let's just re-use the existing command gains.
-            // If you want different kp/kd/torque for each point, store them or define them as needed.
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
-
-            // For a smooth profile, you might just send position and let velocity feed-forward = pt->velocity,
-            // and no torque feed-forward. Or if your motor requires torque feed-forward, adjust accordingly.
             pack_cmd(pt->position, pt->velocity, KP, KD, 0.0f, can_msg_data);
 
-            // Assume motor_id was previously set or use a fixed ID for now. For example:
             int motor_id = 1; // Adjust as needed
-
             if (send_can_message(can_msg_data, CAN_CMD_LENGTH, motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Trajectory point %d/%d sent: pos=%.3f, vel=%.3f",
@@ -667,7 +714,6 @@ static void motion_control_task(void *arg)
             current_trajectory_index++;
             if (current_trajectory_index >= current_trajectory_points)
             {
-                // Done with trajectory
                 trajectory_active = false;
                 ESP_LOGI(LOG_TAG, "Trajectory completed.");
             }

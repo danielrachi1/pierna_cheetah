@@ -16,8 +16,8 @@
 #define KD_MAX 5.0f // Max derivative gain, N-m*s/rad
 #define I_MIN -18.0f // Min current, A
 #define I_MAX 18.0f // Max current, A
-#define T_MIN -18.0f /**< Minimum torque, N-m */
-#define T_MAX 18.0f  /**< Maximum torque, N-m */
+#define T_MIN -18.0f // Minimum torque, N-m
+#define T_MAX 18.0f  // Maximum torque, N-m
 
 #define CAN_CMD_LENGTH 8   /**< Command message length in bytes */
 #define CAN_REPLY_LENGTH 5 /**< Reply message length in bytes */
