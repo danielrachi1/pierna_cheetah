@@ -75,6 +75,9 @@ static int current_trajectory_points = 0;
 static int current_trajectory_index = 0;
 static bool trajectory_active = false;
 
+/* Store the motor ID for the currently active trajectory */
+static int current_trajectory_motor_id = 1;
+
 static float current_motor_position = 0.0f; // Track this from the received replies
 
 /**
@@ -369,12 +372,7 @@ static void can_receive_task(void *arg)
  */
 static void log_trajectory_csv(motion_profile_point_t *trajectory, int num_points)
 {
-    // We'll build a single string and log once.
-    // Format: "index,position,velocity,acceleration;index,position,..."
-    // This could be large; be mindful of potential log truncation.
-    // We'll assume the trajectory is not huge. For very large trajectories,
-    // consider streaming in chunks.
-    char *csv_buffer = malloc(num_points * 80); // Rough estimate: 80 chars per point
+    char *csv_buffer = malloc(num_points * 80); // Rough estimate
     if (!csv_buffer) {
         ESP_LOGE(LOG_TAG, "Failed to allocate memory for CSV buffer");
         return;
@@ -398,7 +396,6 @@ static void log_trajectory_csv(motion_profile_point_t *trajectory, int num_point
  */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
-    // Open the index.html file from SPIFFS
     FILE *f = fopen("/spiffs/index.html", "r");
     if (f == NULL)
     {
@@ -407,10 +404,8 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    // Set the Content-Type header
     httpd_resp_set_type(req, "text/html");
 
-    // Read and send the file in chunks
     char buffer[512];
     size_t read_bytes;
     do
@@ -429,10 +424,7 @@ static esp_err_t root_get_handler(httpd_req_t *req)
         }
     } while (read_bytes > 0);
 
-    // Close the file
     fclose(f);
-
-    // Indicate that the entire chunked response is complete
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
@@ -442,7 +434,6 @@ static esp_err_t file_get_handler(httpd_req_t *req)
     char filepath[FILEPATH_MAX];
     snprintf(filepath, sizeof(filepath), "/spiffs%s", req->uri);
 
-    // Open the requested file
     FILE *f = fopen(filepath, "r");
     if (f == NULL)
     {
@@ -451,25 +442,17 @@ static esp_err_t file_get_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    // Determine content type
     const char *type = "text/plain";
-    if (strstr(req->uri, ".css"))
-    {
+    if (strstr(req->uri, ".css")) {
         type = "text/css";
-    }
-    else if (strstr(req->uri, ".js"))
-    {
+    } else if (strstr(req->uri, ".js")) {
         type = "application/javascript";
-    }
-    else if (strstr(req->uri, ".html"))
-    {
+    } else if (strstr(req->uri, ".html")) {
         type = "text/html";
     }
 
-    // Set the Content-Type header
     httpd_resp_set_type(req, type);
 
-    // Read and send the file in chunks
     char buffer[512];
     size_t read_bytes;
     do
@@ -488,10 +471,8 @@ static esp_err_t file_get_handler(httpd_req_t *req)
         }
     } while (read_bytes > 0);
 
-    // Close the file
     fclose(f);
 
-    // Indicate that the entire chunked response is complete
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
@@ -512,7 +493,6 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    /* Read the data for the POST request */
     while (cur_len < total_len)
     {
         received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
@@ -520,22 +500,20 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         {
             if (received == HTTPD_SOCK_ERR_TIMEOUT)
             {
-                continue; // Retry receiving if timeout occurred
+                continue; // Retry if timeout
             }
             free(buf);
             return ESP_FAIL;
         }
         cur_len += received;
     }
-    buf[total_len] = '\0'; // Null-terminate the buffer
+    buf[total_len] = '\0';
 
-    /* Log the received data */
     ESP_LOGI(LOG_TAG, "Received POST data: %s", buf);
 
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
 
-    /* Parse the JSON command */
     if (!parse_json_command(buf, &command, special_command))
     {
         ESP_LOGE(LOG_TAG, "Failed to parse JSON command");
@@ -548,7 +526,6 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
 
     if (strlen(special_command) > 0)
     {
-        /* Process special command */
         if (strcmp(special_command, "ENTER_MODE") == 0)
         {
             if (send_enter_motor_mode(command.motor_id) == ESP_OK)
@@ -585,12 +562,11 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     }
     else
     {
-        // Determine if it's a simple position-only request or an advanced command
         bool position_only = (command.velocity == 0.0f && command.kp == 0.0f && command.kd == 0.0f && command.feed_forward_torque == 0.0f);
 
         if (position_only)
         {
-            // Position-only command: generate s-curve trajectory
+            // Clear previous trajectory if any
             if (current_trajectory)
             {
                 motion_profile_free_trajectory(current_trajectory);
@@ -600,6 +576,10 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
                 trajectory_active = false;
             }
 
+            // Store motor_id for the trajectory
+            current_trajectory_motor_id = command.motor_id;
+
+            // Generate s-curve trajectory
             if (motion_profile_generate_s_curve(
                     current_motor_position, 0.0f, command.position, 0.0f,
                     MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
@@ -617,7 +597,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         }
         else
         {
-            // Advanced command: send one direct CAN message with the provided parameters
+            // Advanced command
             ESP_LOGW(LOG_TAG, "WARNING: Advanced command used. This can be dangerous!");
             ESP_LOGI(LOG_TAG, "Parsed Command Data:");
             ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
@@ -626,7 +606,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
             ESP_LOGI(LOG_TAG, "  Derivative Gain (kd): %.4f N-m*s/rad", command.kd);
             ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
 
-            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0}; // 8-byte CAN message buffer
+            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
             pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
 
             if (send_can_message(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
@@ -640,7 +620,6 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         }
     }
 
-    /* Send a response back to the client */
     httpd_resp_send(req, "Command received", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
@@ -658,31 +637,25 @@ httpd_uri_t uri_send_command = {
     .handler = send_command_post_handler,
     .user_ctx = NULL};
 httpd_uri_t file_uri = {
-    .uri = "/*", // Match all URIs
+    .uri = "/*",
     .method = HTTP_GET,
     .handler = file_get_handler,
     .user_ctx = NULL};
 
 /**
  * @brief Starts the web server.
- *
- * @return httpd_handle_t Handle to the HTTP server.
  */
 static httpd_handle_t start_webserver(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-
-    /* Enable wildcard URI matching */
     config.uri_match_fn = httpd_uri_match_wildcard;
 
-    /* Start the HTTP server */
     httpd_handle_t server = NULL;
     if (httpd_start(&server, &config) == ESP_OK)
     {
-        /* Register URI handlers */
-        httpd_register_uri_handler(server, &uri_root);         // Handler for "/"
-        httpd_register_uri_handler(server, &uri_send_command); // Handler for "/send_command"
-        httpd_register_uri_handler(server, &file_uri);         // Handler for all other URIs (static files)
+        httpd_register_uri_handler(server, &uri_root);
+        httpd_register_uri_handler(server, &uri_send_command);
+        httpd_register_uri_handler(server, &file_uri);
         return server;
     }
 
@@ -690,10 +663,9 @@ static httpd_handle_t start_webserver(void)
     return NULL;
 }
 
-// Motion control task remains unchanged
+// Motion control task uses current_trajectory_motor_id
 static void motion_control_task(void *arg)
 {
-    // Suppose we run at 100 Hz (time step = 0.01 s)
     const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000));
     for (;;)
     {
@@ -704,11 +676,11 @@ static void motion_control_task(void *arg)
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
             pack_cmd(pt->position, pt->velocity, KP, KD, 0.0f, can_msg_data);
 
-            int motor_id = 1; // Adjust as needed
-            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, motor_id) == ESP_OK)
+            // Use the motor_id associated with the trajectory
+            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, current_trajectory_motor_id) == ESP_OK)
             {
-                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d sent: pos=%.3f, vel=%.3f",
-                         current_trajectory_index, current_trajectory_points, pt->position, pt->velocity);
+                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d sent to motor %d: pos=%.3f, vel=%.3f",
+                         current_trajectory_index, current_trajectory_points, current_trajectory_motor_id, pt->position, pt->velocity);
             }
 
             current_trajectory_index++;
@@ -725,25 +697,18 @@ static void motion_control_task(void *arg)
     vTaskDelete(NULL);
 }
 
-/**
- * @brief Application entry point.
- */
 void app_main(void)
 {
-    /* Initialize NVS (required for Wi-Fi) */
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
-        /* NVS partition was truncated and needs to be erased */
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
 
-    /* Initialize Wi-Fi */
     connect_wifi();
 
-    /* Initialize SPIFFS */
     esp_vfs_spiffs_conf_t conf = {
         .base_path = "/spiffs",
         .partition_label = NULL,
@@ -757,14 +722,9 @@ void app_main(void)
     }
     ESP_LOGI(LOG_TAG, "SPIFFS mounted successfully");
 
-    /* Initialize TWAI (CAN) driver */
     twai_init();
-
-    /* Start web server */
     start_webserver();
 
-    /* Create CAN receive task */
     xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
-
     xTaskCreate(motion_control_task, "motion_control_task", 4096, NULL, 10, NULL);
 }
