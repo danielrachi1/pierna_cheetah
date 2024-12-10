@@ -17,6 +17,7 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "esp_spiffs.h"
+#include "motion_profile.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 
@@ -27,7 +28,7 @@
 // TWAI (CAN) Configuration
 #define TWAI_TX_GPIO_NUM (21)
 #define TWAI_RX_GPIO_NUM (22)
-#define TWAI_MODE TWAI_MODE_NORMAL // Set to normal mode for actual CAN communication
+#define TWAI_MODE TWAI_MODE_NORMAL // Set to normal mode for actual CAN communication; no ack for testing
 #define TWAI_BIT_RATE TWAI_TIMING_CONFIG_1MBITS()
 #define TWAI_FILTER_CONFIG TWAI_FILTER_CONFIG_ACCEPT_ALL()
 
@@ -36,14 +37,17 @@
 #define WIFI_PASS CONFIG_WIFI_PASSWORD
 #define WIFI_MAXIMUM_RETRY CONFIG_WIFI_MAXIMUM_RETRY
 
-/* FreeRTOS event group to signal when we are connected */
-static EventGroupHandle_t s_wifi_event_group;
-
 /* Event group bits */
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT BIT1
 
 #define FILEPATH_MAX 520
+
+#define KP 0
+#define KD 0
+
+/* FreeRTOS event group to signal when we are connected */
+static EventGroupHandle_t s_wifi_event_group;
 
 static int s_retry_num = 0;
 
@@ -51,6 +55,13 @@ static int s_retry_num = 0;
 const uint8_t ENTER_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
 const uint8_t EXIT_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
 const uint8_t ZERO_POS_SENSOR_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE};
+
+static motion_profile_point_t *current_trajectory = NULL;
+static int current_trajectory_points = 0;
+static int current_trajectory_index = 0;
+static bool trajectory_active = false;
+
+static float current_motor_position = 0.0f; // Track this from the received replies
 
 /**
  * @brief Event handler for Wi-Fi events.
@@ -247,7 +258,6 @@ static esp_err_t receive_can_message(twai_message_t *message)
         ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message->identifier);
         ESP_LOGI(LOG_TAG, "  Data Length: %d", message->data_length_code);
         ESP_LOG_BUFFER_HEX(LOG_TAG, message->data, message->data_length_code);
-
     }
     else if (err != ESP_ERR_TIMEOUT)
     {
@@ -314,6 +324,8 @@ static void can_receive_task(void *arg)
 
                 /* Call the unpack_reply function */
                 unpack_reply(received_msg.data, &reply);
+
+                current_motor_position = reply.position;
 
                 /* Log the unpacked reply data */
                 ESP_LOGI(LOG_TAG, "Unpacked reply:");
@@ -534,8 +546,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     }
     else
     {
-        /* Process regular motor command */
-        /* Log the parsed command data */
+        // Process regular motor command
         ESP_LOGI(LOG_TAG, "Parsed Command Data:");
         ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
         ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command.velocity);
@@ -543,18 +554,32 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         ESP_LOGI(LOG_TAG, "  Derivative Gain (kd): %.4f N-m*s/rad", command.kd);
         ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
 
-        /* Pack the command data into a CAN frame */
-        uint8_t can_msg_data[CAN_CMD_LENGTH] = {0}; // 8-byte CAN message buffer
-        pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
-
-        /* Send the CAN message via TWAI */
-        if (send_can_message(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
+        // For simplicity, let's assume we want to move from current_motor_position with start_vel=0 to
+        // command.position with end_vel=0 using an s-curve profile.
+        // We'll ignore kp, kd, and feed_forward_torque for the trajectory generation itself,
+        // but we'll still send them with each setpoint if needed.
+        if (current_trajectory)
         {
-            ESP_LOGI(LOG_TAG, "CAN message sent successfully to Motor ID %d", command.motor_id);
+            motion_profile_free_trajectory(current_trajectory);
+            current_trajectory = NULL;
+            current_trajectory_points = 0;
+            current_trajectory_index = 0;
+            trajectory_active = false;
+        }
+
+        // Generate s-curve trajectory
+        if (motion_profile_generate_s_curve(
+                current_motor_position, 0.0f, command.position, 0.0f,
+                MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
+                &current_trajectory, &current_trajectory_points))
+        {
+            ESP_LOGI(LOG_TAG, "S-curve trajectory generated with %d points", current_trajectory_points);
+            trajectory_active = true;
+            current_trajectory_index = 0;
         }
         else
         {
-            ESP_LOGE(LOG_TAG, "Failed to send CAN message");
+            ESP_LOGE(LOG_TAG, "Failed to generate s-curve trajectory");
         }
     }
 
@@ -610,6 +635,50 @@ static httpd_handle_t start_webserver(void)
     return NULL;
 }
 
+// This is just an example. You could create a separate task for this.
+static void motion_control_task(void *arg)
+{
+    // Suppose we run at 100 Hz (time step = 0.01 s)
+    const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000));
+    for (;;)
+    {
+        if (trajectory_active && current_trajectory_index < current_trajectory_points)
+        {
+            motion_profile_point_t *pt = &current_trajectory[current_trajectory_index];
+
+            // Use pack_cmd to convert position/velocity to CAN frame.
+            // You might set kp, kd, and torque here as well. For now, let's just re-use the existing command gains.
+            // If you want different kp/kd/torque for each point, store them or define them as needed.
+            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
+
+            // For a smooth profile, you might just send position and let velocity feed-forward = pt->velocity,
+            // and no torque feed-forward. Or if your motor requires torque feed-forward, adjust accordingly.
+            pack_cmd(pt->position, pt->velocity, KP, KD, 0.0f, can_msg_data);
+
+            // Assume motor_id was previously set or use a fixed ID for now. For example:
+            int motor_id = 1; // Adjust as needed
+
+            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, motor_id) == ESP_OK)
+            {
+                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d sent: pos=%.3f, vel=%.3f",
+                         current_trajectory_index, current_trajectory_points, pt->position, pt->velocity);
+            }
+
+            current_trajectory_index++;
+            if (current_trajectory_index >= current_trajectory_points)
+            {
+                // Done with trajectory
+                trajectory_active = false;
+                ESP_LOGI(LOG_TAG, "Trajectory completed.");
+            }
+        }
+
+        vTaskDelay(delay_ticks);
+    }
+
+    vTaskDelete(NULL);
+}
+
 /**
  * @brief Application entry point.
  */
@@ -650,4 +719,6 @@ void app_main(void)
 
     /* Create CAN receive task */
     xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
+
+    xTaskCreate(motion_control_task, "motion_control_task", 4096, NULL, 10, NULL);
 }
