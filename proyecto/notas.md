@@ -189,7 +189,7 @@ Formateado de la siguiente manera. Para cada cantidad, el bit 0 es el LSB (bit m
 - **Comando de velocidad** de 12 bits, entre -30 y +30 rad/s
 - **kp** de 12 bits, entre 0 y 500 N·m/rad
 - **kd** de 12 bits, entre 0 y 100 N·m·s/rad
-- **Par de avance** de 12 bits, entre -18 y 18 N·m
+- **feed-forward torque** de 12 bits, entre -18 y 18 N·m
 
 El paquete CAN consta de 8 palabras de 8 bits.
 
@@ -204,9 +204,9 @@ Formateado de la siguiente manera. Para cada cantidad, el bit 0 es el LSB (bit m
 | 3    | 3-0             | velocidad\[3-0\]       | bits 3-0 de velocidad cmd   |
 | 4    | 7-0             | kp\[7-0\]              | bits 7-0 de kp              |
 | 5    | 7-0             | kd\[11-4\]             | bits 11-4 de kd             |
-| 6    | 7-4             | par\[11-8\]            | bits 11-8 de par            |
+| 6    | 7-4             | tff\[11-8\]            | bits 11-8 de tff            |
 | 6    | 3-0             | kd\[3-0\]              | bits 3-0 de kd              |
-| 7    | 7-0             | par\[7-0\]             | bits 7-0 de par             |
+| 7    | 7-0             | tff\[7-0\]             | bits 7-0 de tff             |
 
 Escribí algunas funciones que ayudarán a manejar esta información en: `experimentos/can_utils/`.
 
@@ -308,3 +308,13 @@ En [este archivo](https://os.mbed.com/users/benkatz/code/CanMaster//file/107df25
   - Feed-forward torque: considero que es adecuado dejar este valor en 0, por ahora.
 
 Necesito encontrar alguna manera de hacer que tenga un arranque más suave.
+
+### 2024-12-10
+
+Voy a implementar curvas de movimiento. Lo haré creando otro componente en el firmware de la ESP32.
+
+Curvas implementadas en el firmware. Aún debo probarlas en el laboratorio.
+
+Funciona!
+
+Actualmente hay un bug. Por alguna razón, cuando se vuelve a encender el motor, y este no está en posición 0, el primer movimiento lo hace sin suavizado. Esto puede ser peligroso.
