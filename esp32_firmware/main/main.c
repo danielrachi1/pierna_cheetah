@@ -28,7 +28,7 @@
 // TWAI (CAN) Configuration
 #define TWAI_TX_GPIO_NUM (21)
 #define TWAI_RX_GPIO_NUM (22)
-#define TWAI_MODE TWAI_MODE_NO_ACK // no ack for testing; switch to TWAI_MODE_NORMAL for actual CAN
+#define TWAI_MODE TWAI_MODE_NORMAL // no ack for testing; switch to TWAI_MODE_NORMAL for actual CAN
 #define TWAI_BIT_RATE TWAI_TIMING_CONFIG_1MBITS()
 #define TWAI_FILTER_CONFIG TWAI_FILTER_CONFIG_ACCEPT_ALL()
 

@@ -29,6 +29,7 @@
  */
 
 /* Configuration Parameters (can be adjusted as needed) */
+// BE VERY CAREFUL WHEN CHANGING THESE VALUES THE MOTORS WILL MOVE *FAST*
 #define MP_DEFAULT_MAX_VEL   5.0f   ///< Default maximum velocity (rad/s)
 #define MP_DEFAULT_MAX_ACC   10.0f  ///< Default maximum acceleration (rad/s^2)
 #define MP_DEFAULT_MAX_JERK  50.0f  ///< Default maximum jerk (rad/s^3)
