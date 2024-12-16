@@ -318,3 +318,7 @@ Curvas implementadas en el firmware. Aún debo probarlas en el laboratorio.
 Funciona!
 
 Actualmente hay un bug. Por alguna razón, cuando se vuelve a encender el motor, y este no está en posición 0, el primer movimiento lo hace sin suavizado. Esto puede ser peligroso.
+
+### 2024-12-16
+
+Cambié cómo la ESP32 se conecta a la red WiFi y ahora se puede entrar a la página desde `http://cheetah.local`. En caso que esto no funcione, la esp imprime en serial su IP, para acceder directamente desde esta.
