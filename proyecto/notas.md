@@ -346,3 +346,7 @@ Decidí que para organizar los componentes y circuitos de manera adecuada, lo me
 ### 2025-01-20
 
 Diseñé la herramienta que sostendrá la bola de squash.
+
+Para organizar los diferentes componentes electrónicos, cables, etc. Voy a cortar una pieza de MDF que colocaré en el cuadrante opuesto a la pata en el montaje. El layout lo realizo en Inventor.
+
+Diseñé un case para organizar la ESP32 y el módulo CAN. La ESP32 debe estar conectada por USB para que funcione el montaje. Decidí que esto es apropiado ya que por ahora no se planea usar la pata sin un computador.
