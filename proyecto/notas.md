@@ -335,10 +335,14 @@ Intenté diseñar el eslabón en FreeCAD. Pero la curva de aprendizaje es mayor 
 
 Reparé el cableado de los tres motores. Los cables de alimentación estaban mal soldados y mal aislados, lo que previamente causó un corto circuito durante una prueba. Realicé una nueva soldadura de los conectores y aislé los terminales con tubos termorretráctiles. Aunque los cables de datos no representaban riesgo, eran muy frágiles, por lo que también los protegí con tubos termorretráctiles para reforzar su integridad.
 
-Tras varias iteraciones e impresiones del diseño, logré finalizar el eslabón final. El archivo del diseño se encuentra disponible en la carpeta `cad`.
+Después de varias iteraciones e impresiones del diseño, logré finalizar el eslabón final. El archivo del diseño está disponible en la carpeta `cad`. La interfaz para el montaje de la herramienta, que utiliza tres tornillos, se define de la siguiente manera: tres agujeros para tornillos M4 dispuestos alrededor de un eje central, donde el centro de cada agujero se encuentra a 6 mm del eje.
 
 ### 2025-01-15
 
 Compré bolas de squash que servirán como "zapatos" para la pata.
 
 Decidí que para organizar los componentes y circuitos de manera adecuada, lo mejor es utilizar una placa de MDF como base, que se sostendrá a los perfiles de aluminio inferiores, posiblemente al cuadrante posterior derecho, y que tendrá un layout que definirá los huecos para tornillos que anclarán cada componente. Para esto necesito empezar por tomar medidas de los perfiles en estos cuadrantes.
+
+### 2025-01-20
+
+Diseñé la herramienta que sostendrá la bola de squash.
