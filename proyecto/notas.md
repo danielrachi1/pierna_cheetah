@@ -322,3 +322,23 @@ Actualmente hay un bug. Por alguna razón, cuando se vuelve a encender el motor,
 ### 2024-12-16
 
 Cambié cómo la ESP32 se conecta a la red WiFi y ahora se puede entrar a la página desde `http://cheetah.local`. En caso que esto no funcione, la esp imprime en serial su IP, para acceder directamente desde esta.
+
+Revisé la bolsa de repuestos que estaba en el laboratorio. Encontré varias piezas que me sirven. Ahora solo me hace falta el eslabon final.
+
+La polea tiene un rodamiendo que no se puede remover. Creo que está pegado. Debo diseñal el eslabon final de tal manera que no deba introducirlo en la barra del rodamiento.
+
+### 2024-12-17
+
+Intenté diseñar el eslabón en FreeCAD. Pero la curva de aprendizaje es mayor de lo que esperaba. Por ahora voy a diseñar en fusion (la version online), pero en un futuro se deberían pasar estos modelos a un software open source.
+
+### 2024-12-18
+
+Reparé el cableado de los tres motores. Los cables de alimentación estaban mal soldados y mal aislados, lo que previamente causó un corto circuito durante una prueba. Realicé una nueva soldadura de los conectores y aislé los terminales con tubos termorretráctiles. Aunque los cables de datos no representaban riesgo, eran muy frágiles, por lo que también los protegí con tubos termorretráctiles para reforzar su integridad.
+
+Tras varias iteraciones e impresiones del diseño, logré finalizar el eslabón final. El archivo del diseño se encuentra disponible en la carpeta `cad`.
+
+### 2025-01-15
+
+Compré bolas de squash que servirán como "zapatos" para la pata.
+
+Decidí que para organizar los componentes y circuitos de manera adecuada, lo mejor es utilizar una placa de MDF como base, que se sostendrá a los perfiles de aluminio inferiores, posiblemente al cuadrante posterior derecho, y que tendrá un layout que definirá los huecos para tornillos que anclarán cada componente. Para esto necesito empezar por tomar medidas de los perfiles en estos cuadrantes.
