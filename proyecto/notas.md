@@ -358,3 +358,5 @@ Diseñé una caja/panel para los 3 switches del montaje (1 de cada motor).
 ### 2025-01-23
 
 Decidí que no es necesario usar MDF y cortarlo con laser para atornillar los componentes. Puedo usar tornillos para madera.
+
+... Tras pensarlo mejor, vale la pena cortar MDF con laser para tener las proporciones exactas de la tabla sobre la base. Aún considero que no es necesario cortar un layout con los agujeros de los tornillos de cada componente.
