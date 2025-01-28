@@ -1,4 +1,4 @@
-# Análisis del Estado Actual
+# Análisis del Estado Inicial
 
 ## Inspección Física y Funcional
 
@@ -9,17 +9,16 @@
 - **Motor 2**: Se desplaza con facilidad en un rango aproximado de 270 grados, con limitación únicamente impuesta por la estructura.
 - **Motor 3** (con poleas): Presenta dificultad para moverse, aunque con suficiente fuerza es posible moverlo paso a paso.
 - **Soporte del motor 1**: Se encuentra en buen estado.
-- **Soporte del motor 2**: Muestra signos de desgaste en la cara orientada hacia el motor 1, posiblemente debido al calor.
+- **Soporte del motor 2**: La impresión es de la mejor calidad, pero no parece tener signos de daño.
 - **Soporte del motor 3**: Aunque es una impresión de baja calidad, no presenta fracturas visibles.
 - **Cadera**: Se observa una fractura considerable en la pieza impresa.
 - **Muslo**: Falta una parte de la impresión. Al parecer, sufrió una fractura previa que fue reparada con pegamento (super bonder).
 - **Rodilla**: No se observan daños.
 - **Pierna**: Se encuentra en buen estado, aunque uno de los tornillos debería ser más corto.
-- **Cableado de los motores**: Parece estar en buenas condiciones, aunque algunos pines se desconectan al realizar ciertos movimientos.
+- **Cableado de los motores**: Algunos pines se desconectan al realizar ciertos movimientos. El cableado de alimentación no está bien aislado y puede generar cortos. El cableado de datos no parece ser peligroso, pero está algo desordenado.
 - **Botón de emergencia**: Se percibe una pieza suelta en su interior, pero el botón parece funcionar correctamente.
 - **Fuente de alimentación**: En buen estado.
 - **Switches**: Están bien conectados y no muestran daños visibles en los cables.
-- **Cables de datos de los motores**: Parecen estar en cortocircuito, pero se intuye que esto se debe a que los cables están organizados para ser reconectados a los módulos CAN.
 
 Se tomaron fotografías del estado visual actual. Estas imágenes se encuentran en el repositorio, en la carpeta `proyecto/imagenes/`.
 
@@ -44,4 +43,4 @@ Dadas estas circunstancias, intentar encender el sistema o probar cualquier func
 
 ### Análisis del Software Actual
 
-En el informe del proyecto PAI, se menciona que el código del sistema debería encontrarse en el repositorio de GitHub [https://github.com/jolayam/proyecto_PAI](https://github.com/jolayam/proyecto_PAI). Sin embargo, tras revisar el repositorio, no se encontró el código correspondiente. Al revisar la memoria SD de la Raspberry Pi, se recuperaron algunos archivos, pero noté que faltaban otros importantes. Por ejemplo, el archivo `CAN_COM.cpp` que se menciona en el informe no estaba presente en la información descargada de la tarjeta SD, lo que sugiere que parte del código necesario para la comunicación CAN se ha extraviado. Aunque algunos archivos esenciales están disponibles, es probable que el sistema no funcione correctamente sin este archivo, o al menos requiera una actualización considerable. Dado que la versión del software parece desactualizada, se recomienda realizar una reescritura parcial o total del código, especialmente considerando la posible migración a ROS2 y la implementación de nuevas plataformas, como la ESP32.
+En el informe del proyecto PAI, se menciona que el código del sistema debería encontrarse en el repositorio de GitHub [https://github.com/jolayam/proyecto_PAI](https://github.com/jolayam/proyecto_PAI). Sin embargo, tras revisar el repositorio, no se encontró el código correspondiente. Al revisar la memoria SD de la Raspberry Pi, se recuperaron algunos archivos, pero noté que faltaban otros importantes. Por ejemplo, el archivo `CAN_COM.cpp` que se menciona en el informe no estaba presente en la información descargada de la tarjeta SD, lo que sugiere que parte del código necesario para la comunicación CAN se ha extraviado. Aunque algunos archivos esenciales están disponibles, es probable que el sistema no funcione correctamente sin este archivo, o al menos requiera una actualización considerable. Dado que la versión del software parece desactualizada, se recomienda realizar una reescritura parcial o total del código, especialmente considerando la posible implementación de nuevas plataformas, como la ESP32.
