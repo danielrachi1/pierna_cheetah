@@ -2,6 +2,14 @@
 
 Apuntes sobre el desarrollo del proyecto
 
+## 2024-08-16
+
+Traslado de la pata de la oficina al laboratorio.
+
+## 2024-08-21
+
+Se tomaron fotos y se escribió un informe describiendo el estado de las diferentes partes de la pata.
+
 ## 2024-10-07
 
 En el proyecto de PAI utilizaron ROS1. Sería una buena oportunidad para migrar a ROS2.
