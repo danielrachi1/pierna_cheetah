@@ -489,6 +489,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
             }
 
             current_trajectory_motor_id = command.motor_id;
+
             if (motion_profile_generate_s_curve(
                     current_motor_position, 0.0f, command.position, 0.0f,
                     MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
@@ -660,6 +661,10 @@ void app_main(void)
     ESP_ERROR_CHECK(mdns_instance_name_set("Cheetah Leg Controller"));
     ESP_ERROR_CHECK(mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0));
     ESP_LOGI(LOG_TAG, "mDNS started. You can now access http://cheetah.local/");
+
+    send_exit_motor_mode(0x1);
+    send_exit_motor_mode(0x2);
+    send_exit_motor_mode(0x3);
 
     xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
     xTaskCreate(motion_control_task, "motion_control_task", 4096, NULL, 10, NULL);

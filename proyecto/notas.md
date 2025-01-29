@@ -383,3 +383,5 @@ Aspectos a arreglar:
 
 - Encontrar valor de KP y KD *para cada motor*.
 - Para el motor 1, invertir el signo del ángulo. (gira en la dirección equivocada.)
+
+Arreglé el bug mencionado el 2024-12-10. Ahora la ESP32 envía `Exit motor mode` durante el boot. Esto evita riesgos de movimientos subitos cuando se reinicia la ESP32.
