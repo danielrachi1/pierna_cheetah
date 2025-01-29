@@ -58,8 +58,12 @@
 #define T_MIN -18.0f
 #define T_MAX 18.0f
 
-#define KP 0
-#define KD 0
+#define KP1 10
+#define KD1 0
+#define KP2 0
+#define KD2 0
+#define KP3 0
+#define KD3 0
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -573,13 +577,39 @@ static void motion_control_task(void *arg)
         {
             motion_profile_point_t *pt = &current_trajectory[current_trajectory_index];
 
+            float kp_current = 0.0f;
+            float kd_current = 0.0f;
+
+            // Decide which KP/KD to use
+            switch (current_trajectory_motor_id)
+            {
+                case 1:
+                    kp_current = KP1;
+                    kd_current = KD1;
+                    break;
+                case 2:
+                    kp_current = KP2;
+                    kd_current = KD2;
+                    break;
+                case 3:
+                    kp_current = KP3;
+                    kd_current = KD3;
+                    break;
+                default:
+                    // fallback
+                    kp_current = 0.0f;
+                    kd_current = 0.0f;
+                    break;
+            }
+
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
-            pack_cmd(pt->position, pt->velocity, KP, KD, 0.0f, can_msg_data);
+            pack_cmd(pt->position, pt->velocity, kp_current, kd_current, 0.0f, can_msg_data);
 
             if (send_can_message(can_msg_data, CAN_CMD_LENGTH, current_trajectory_motor_id) == ESP_OK)
             {
-                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d sent to motor %d: pos=%.3f, vel=%.3f",
-                         current_trajectory_index, current_trajectory_points, current_trajectory_motor_id, pt->position, pt->velocity);
+                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d -> Motor %d | pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
+                         current_trajectory_index, current_trajectory_points, current_trajectory_motor_id,
+                         pt->position, pt->velocity, kp_current, kd_current);
             }
 
             current_trajectory_index++;
