@@ -41,6 +41,11 @@ function sendPositionOnlyCommand() {
         return;
     }
 
+    // Invert the sign only if motor_id is 1
+    if (motor_id === 1) {
+        position_deg = -position_deg;
+    }
+
     var position_rad = degreesToRadians(position_deg);
 
     var command = {
@@ -53,17 +58,17 @@ function sendPositionOnlyCommand() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(command)
     })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => { throw new Error(text) });
-            }
-            return response.text();
-        })
-        .then(data => showNotification(data, 'success'))
-        .catch(error => {
-            console.error('Error:', error);
-            showNotification('Failed to send command: ' + error.message, 'error');
-        });
+    .then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text) });
+        }
+        return response.text();
+    })
+    .then(data => showNotification(data, 'success'))
+    .catch(error => {
+        console.error('Error:', error);
+        showNotification('Failed to send command: ' + error.message, 'error');
+    });
 }
 
 function sendAdvancedCommand() {
