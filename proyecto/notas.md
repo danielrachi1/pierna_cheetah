@@ -385,3 +385,9 @@ Aspectos a arreglar:
 - Para el motor 1, invertir el signo del ángulo. (gira en la dirección equivocada.)
 
 Arreglé el bug mencionado el 2024-12-10. Ahora la ESP32 envía `Exit motor mode` durante el boot. Esto evita riesgos de movimientos subitos cuando se reinicia la ESP32.
+
+## 2025-01-30
+
+Presenté avances al Profesor Ricardo. Además de arreglar algunos problemas que tiene la pata, los siguiente pasos son: cinemática inversa y rutinas de movimiento. También discutimos ideas para las guías de laboratorio que desarrollaré. Los temás serán cinemática inversa y rutinas de movimiento.
+
+Diseñé un nuevo eslabón (la parte que cubre la polea).
