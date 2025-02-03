@@ -391,3 +391,11 @@ Arreglé el bug mencionado el 2024-12-10. Ahora la ESP32 envía `Exit motor mode
 Presenté avances al Profesor Ricardo. Además de arreglar algunos problemas que tiene la pata, los siguiente pasos son: cinemática inversa y rutinas de movimiento. También discutimos ideas para las guías de laboratorio que desarrollaré. Los temás serán cinemática inversa y rutinas de movimiento.
 
 Diseñé un nuevo eslabón (la parte que cubre la polea).
+
+## 2025-01-31
+
+Busqué el conector CAN del motor en las tiendas de la carrera 9na. No lo encontré
+
+## 2025-02-03
+
+Volví a diseñar la pieza que cubre la polea. La anterior era muy grande para mi impresora.
