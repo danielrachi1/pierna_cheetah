@@ -381,7 +381,7 @@ Mejoré la organización de los cables.
 
 Aspectos a arreglar:
 
-- Encontrar valor de KP y KD *para cada motor*.
+- Encontrar valor de KP y KD _para cada motor_.
 - Para el motor 1, invertir el signo del ángulo. (gira en la dirección equivocada.)
 
 Arreglé el bug mencionado el 2024-12-10. Ahora la ESP32 envía `Exit motor mode` durante el boot. Esto evita riesgos de movimientos subitos cuando se reinicia la ESP32.
@@ -399,3 +399,8 @@ Busqué el conector CAN del motor en las tiendas de la carrera 9na. No lo encont
 ## 2025-02-03
 
 Volví a diseñar la pieza que cubre la polea. La anterior era muy grande para mi impresora.
+
+## 2025-02-04
+
+Intentaré arreglar definitivamente el problema que tienen los motores en donde en ocasiones hace un movimiento extremadamente rápido tras reiniciar (o re-flashear) la ESP32. Esto es una preocupación grande de seguridad, especialmente si se planea que estudiantes futuros usen el robot.
+El home del robot será la posición en la que puede descansar con los motores apagados. Esto es: El pulley case y el efector final están alineados, y el soporte del motor 2 está horizontal.
