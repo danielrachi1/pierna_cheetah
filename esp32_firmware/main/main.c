@@ -68,6 +68,9 @@
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
+// Global flag array for each motor (index 1-3 are used; index 0 unused)
+static bool motor_engaged[4] = {false, false, false, false};
+
 const uint8_t ENTER_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
 const uint8_t EXIT_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
 const uint8_t ZERO_POS_SENSOR_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE};
@@ -393,6 +396,78 @@ static esp_err_t file_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief Synchronizes the motor's target by forcing a fresh sensor read,
+ *        then commands the motor to hold that position before entering motor mode.
+ *
+ * The function performs the following steps:
+ * 1) Sends a dummy command to force the motor to reply with its sensor reading.
+ * 2) Waits for a sensor reply from the motor.
+ * 3) Unpacks the sensor reading and sends a hold command to update the motor's target.
+ * 4) Finally, sends the enter motor mode command.
+ *
+ * @param motor_id The CAN identifier of the motor.
+ */
+static void sync_and_engage_motor_control(int motor_id)
+{
+    // Step 1: Send a dummy command to force a sensor update.
+    uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
+    pack_cmd(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, dummy_cmd);
+    if (send_can_message(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send dummy command for synchronization", motor_id);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for the motor to process and respond
+
+    // Step 2: Wait for the sensor reply from the motor.
+    twai_message_t sensor_msg;
+    bool sensor_received = false;
+    const int max_attempts = 5;
+    for (int i = 0; i < max_attempts; i++)
+    {
+        if (receive_can_message(&sensor_msg) == ESP_OK &&
+            sensor_msg.data_length_code == 6 && // Expect a 6-byte sensor reply
+            sensor_msg.identifier == motor_id)  // Verify the response comes from the correct motor
+        {
+            sensor_received = true;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+    if (!sensor_received)
+    {
+        ESP_LOGE(LOG_TAG, "Motor ID %d: No sensor reply received during synchronization", motor_id);
+        return;
+    }
+
+    // Step 3: Unpack the sensor reading and send a hold command using that value.
+    motor_reply_t reply = {0};
+    unpack_reply(sensor_msg.data, &reply);
+    ESP_LOGI(LOG_TAG, "Motor ID %d: Sensor reading: position=%.4f, velocity=%.4f, current=%.2f",
+             motor_id, reply.position, reply.velocity, reply.current);
+
+    uint8_t hold_cmd[CAN_CMD_LENGTH] = {0};
+    // Build the hold command using the sensor reading as the target.
+    pack_cmd(reply.position, 0.0f, 10, 1, 0.0f, hold_cmd);
+    if (send_can_message(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    {
+        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send hold command", motor_id);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(50)); // Optional: wait a short moment for the hold command to take effect
+
+    // Step 4: Finally, send the enter motor mode command.
+    if (send_enter_motor_mode(motor_id) == ESP_OK)
+    {
+        ESP_LOGI(LOG_TAG, "Motor ID %d: Enter motor mode command sent successfully", motor_id);
+    }
+    else
+    {
+        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send enter motor mode command", motor_id);
+    }
+}
+
 static esp_err_t send_command_post_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
@@ -441,41 +516,70 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     {
         if (strcmp(special_command, "ENTER_MODE") == 0)
         {
-            if (send_enter_motor_mode(command.motor_id) == ESP_OK)
+            // If not engaged, engage the motor and set flag to true.
+            if (!motor_engaged[command.motor_id])
             {
-                ESP_LOGI(LOG_TAG, "Enter Motor Mode command sent successfully");
+                sync_and_engage_motor_control(command.motor_id);
+                motor_engaged[command.motor_id] = true;
             }
             else
             {
-                ESP_LOGE(LOG_TAG, "Failed to send Enter Motor Mode command");
+                ESP_LOGI(LOG_TAG, "Motor ID %d already engaged.", command.motor_id);
             }
         }
         else if (strcmp(special_command, "EXIT_MODE") == 0)
         {
-            if (send_exit_motor_mode(command.motor_id) == ESP_OK)
+            if (motor_engaged[command.motor_id])
             {
-                ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
+                if (send_exit_motor_mode(command.motor_id) == ESP_OK)
+                {
+                    ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
+                    motor_engaged[command.motor_id] = false;
+                }
+                else
+                {
+                    ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command");
+                }
             }
             else
             {
-                ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command");
+                ESP_LOGI(LOG_TAG, "Motor ID %d already disengaged.", command.motor_id);
             }
         }
         else if (strcmp(special_command, "ZERO_POS") == 0)
         {
-            if (send_zero_position_sensor(command.motor_id) == ESP_OK)
+            // Allow ZERO_POS only when motor is unlocked.
+            if (!motor_engaged[command.motor_id])
             {
-                ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
+                if (send_zero_position_sensor(command.motor_id) == ESP_OK)
+                {
+                    ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
+                }
+                else
+                {
+                    ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
+                }
             }
             else
             {
-                ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
+                ESP_LOGE(LOG_TAG, "Cannot set sensor zero while motor is engaged! Command rejected.");
             }
         }
     }
     else
     {
-        bool position_only = (command.velocity == 0.0f && command.kp == 0.0f && command.kd == 0.0f && command.feed_forward_torque == 0.0f);
+        // For move (position) commands.
+        if (!motor_engaged[command.motor_id])
+        {
+            ESP_LOGE(LOG_TAG, "Motor ID %d is not engaged. Please enter motor mode first.", command.motor_id);
+            httpd_resp_send(req, "Motor not engaged", HTTPD_RESP_USE_STRLEN);
+            return ESP_OK;
+        }
+
+        bool position_only = (command.velocity == 0.0f &&
+                              command.kp == 0.0f &&
+                              command.kd == 0.0f &&
+                              command.feed_forward_torque == 0.0f);
 
         if (position_only)
         {
@@ -529,7 +633,6 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         }
     }
 
-    httpd_resp_send(req, "Command received", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
@@ -584,23 +687,23 @@ static void motion_control_task(void *arg)
             // Decide which KP/KD to use
             switch (current_trajectory_motor_id)
             {
-                case 1:
-                    kp_current = KP1;
-                    kd_current = KD1;
-                    break;
-                case 2:
-                    kp_current = KP2;
-                    kd_current = KD2;
-                    break;
-                case 3:
-                    kp_current = KP3;
-                    kd_current = KD3;
-                    break;
-                default:
-                    // fallback
-                    kp_current = 0.0f;
-                    kd_current = 0.0f;
-                    break;
+            case 1:
+                kp_current = KP1;
+                kd_current = KD1;
+                break;
+            case 2:
+                kp_current = KP2;
+                kd_current = KD2;
+                break;
+            case 3:
+                kp_current = KP3;
+                kd_current = KD3;
+                break;
+            default:
+                // fallback
+                kp_current = 0.0f;
+                kd_current = 0.0f;
+                break;
             }
 
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
@@ -662,6 +765,7 @@ void app_main(void)
     ESP_ERROR_CHECK(mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0));
     ESP_LOGI(LOG_TAG, "mDNS started. You can now access http://cheetah.local/");
 
+    // On boot, force all motors to exit motor mode (flag remains false)
     send_exit_motor_mode(0x1);
     send_exit_motor_mode(0x2);
     send_exit_motor_mode(0x3);
