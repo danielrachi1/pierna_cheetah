@@ -404,3 +404,9 @@ Volví a diseñar la pieza que cubre la polea. La anterior era muy grande para m
 
 Intentaré arreglar definitivamente el problema que tienen los motores en donde en ocasiones hace un movimiento extremadamente rápido tras reiniciar (o re-flashear) la ESP32. Esto es una preocupación grande de seguridad, especialmente si se planea que estudiantes futuros usen el robot.
 El home del robot será la posición en la que puede descansar con los motores apagados. Esto es: El pulley case y el efector final están alineados, y el soporte del motor 2 está horizontal.
+
+## 2025-02-05
+
+Probé el pulley case en el laboratorio y tenía varios problemas. Así que lo arregé / volví a diseñar.
+
+Pedí un paquete de conectores GH 1.25 por Amazon. Estoy casi seguro de que este incluye el conector necesario. En caso que no sea así, solo me queda pedir por Aliexpress y esperar que lo entreguen a tiempo.
