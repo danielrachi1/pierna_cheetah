@@ -44,23 +44,23 @@ motor_state_t* motor_control_get_state(int motor_id)
     return &motor_states[motor_id - 1];
 }
 
-void sync_and_engage_motor_control(int motor_id)
+esp_err_t sync_and_engage_motor_control(int motor_id)
 {
     motor_state_t *state = motor_control_get_state(motor_id);
     if (!state) {
         ESP_LOGE(LOG_TAG, "Invalid motor id %d", motor_id);
-        return;
+        return ESP_FAIL;
     }
 
     uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
     pack_cmd(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, dummy_cmd);
     if (can_bus_transmit(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK) {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send dummy command for synchronization", motor_id);
-        return;
+        return ESP_FAIL;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // Wait for sensor reply (this is a simplified approach; ideally, sensor data would be updated asynchronously)
+    // Wait for sensor reply
     twai_message_t sensor_msg;
     bool sensor_received = false;
     const int max_attempts = 5;
@@ -76,7 +76,7 @@ void sync_and_engage_motor_control(int motor_id)
     }
     if (!sensor_received) {
         ESP_LOGE(LOG_TAG, "Motor ID %d: No sensor reply received during synchronization", motor_id);
-        return;
+        return ESP_FAIL;
     }
 
     motor_reply_t reply = {0};
@@ -91,15 +91,19 @@ void sync_and_engage_motor_control(int motor_id)
     pack_cmd(reply.position, 0.0f, 10, 1, 0.0f, hold_cmd);
     if (can_bus_transmit(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK) {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send hold command", motor_id);
-        return;
+        return ESP_FAIL;
     }
     vTaskDelay(pdMS_TO_TICKS(50));
+
     if (can_bus_send_enter_mode(motor_id) == ESP_OK) {
         ESP_LOGI(LOG_TAG, "Motor ID %d: Enter motor mode command sent successfully", motor_id);
+        return ESP_OK;
     } else {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send enter motor mode command", motor_id);
+        return ESP_FAIL;
     }
 }
+
 
 void motor_control_task(void *arg)
 {
@@ -147,8 +151,13 @@ void motor_control_handle_command(const motor_command_t *command, const char *sp
     if (special_command && strlen(special_command) > 0) {
         if (strcmp(special_command, "ENTER_MODE") == 0) {
             if (!state->engaged) {
-                sync_and_engage_motor_control(state->motor_id);
-                state->engaged = true;
+                // Only set engaged if synchronization succeeds.
+                if (sync_and_engage_motor_control(state->motor_id) == ESP_OK) {
+                    state->engaged = true;
+                    ESP_LOGI(LOG_TAG, "Motor ID %d engaged successfully.", state->motor_id);
+                } else {
+                    ESP_LOGE(LOG_TAG, "Motor ID %d failed to engage.", state->motor_id);
+                }
             } else {
                 ESP_LOGI(LOG_TAG, "Motor ID %d already engaged.", state->motor_id);
             }

@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include "motion_profile.h"
 #include "message_parser.h"
+#include "esp_err.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -52,7 +53,7 @@ void motor_control_task(void *arg);
  *
  * @param motor_id The identifier of the motor.
  */
-void sync_and_engage_motor_control(int motor_id);
+esp_err_t sync_and_engage_motor_control(int motor_id);
 
 /**
  * @brief Processes an incoming motor command.
