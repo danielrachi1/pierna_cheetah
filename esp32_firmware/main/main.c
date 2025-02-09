@@ -20,6 +20,7 @@
 
 #include "can_bus.h"
 #include "http_server.h"
+#include "motor_control.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 
@@ -37,43 +38,8 @@
 
 #define FILEPATH_MAX 520
 
-/* Define ranges for position, velocity, etc. */
-#define P_MIN -95.5f
-#define P_MAX 95.5f
-#define V_MIN -45.0f
-#define V_MAX 45.0f
-#define KP_MIN 0.0f
-#define KP_MAX 500.0f
-#define KD_MIN 0.0f
-#define KD_MAX 5.0f
-#define I_MIN -18.0f
-#define I_MAX 18.0f
-#define T_MIN -18.0f
-#define T_MAX 18.0f
-
-#define KP1 10
-#define KD1 0
-#define KP2 0
-#define KD2 0
-#define KP3 0
-#define KD3 0
-
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
-
-// Global flag array for each motor (index 1-3 are used; index 0 unused)
-static bool motor_engaged[4] = {false, false, false, false};
-
-const uint8_t ENTER_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFC};
-const uint8_t EXIT_MOTOR_MODE_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD};
-const uint8_t ZERO_POS_SENSOR_CMD[DATA_LENGTH] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE};
-
-static motion_profile_point_t *current_trajectory = NULL;
-static int current_trajectory_points = 0;
-static int current_trajectory_index = 0;
-static bool trajectory_active = false;
-static int current_trajectory_motor_id = 1;
-static float current_motor_position = 0.0f;
 
 static void event_handler(void *arg, esp_event_base_t event_base,
                           int32_t event_id, void *event_data)
@@ -166,188 +132,6 @@ static void connect_wifi(void)
     vEventGroupDelete(s_wifi_event_group);
 }
 
-static void can_receive_task(void *arg)
-{
-    while (1)
-    {
-        twai_message_t received_msg;
-        esp_err_t err = can_bus_receive(&received_msg);
-        if (err == ESP_OK)
-        {
-            if (received_msg.data_length_code >= 5)
-            {
-                motor_reply_t reply = {0};
-                unpack_reply(received_msg.data, &reply);
-                current_motor_position = reply.position;
-                ESP_LOGI(LOG_TAG, "Unpacked reply:");
-                ESP_LOGI(LOG_TAG, "  Motor ID: %d", reply.motor_id);
-                ESP_LOGI(LOG_TAG, "  Position: %.4f radians", reply.position);
-                ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", reply.velocity);
-                ESP_LOGI(LOG_TAG, "  Current: %.2f A", reply.current);
-            }
-            else
-            {
-                ESP_LOGE(LOG_TAG, "Received CAN message does not contain enough data to unpack");
-            }
-        }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-    vTaskDelete(NULL);
-}
-
-static void log_trajectory_csv(motion_profile_point_t *trajectory, int num_points)
-{
-    char *csv_buffer = malloc(num_points * 80);
-    if (!csv_buffer)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to allocate memory for CSV buffer");
-        return;
-    }
-
-    csv_buffer[0] = '\0';
-    for (int i = 0; i < num_points; i++)
-    {
-        char line[80];
-        snprintf(line, sizeof(line), "%d,%.6f,%.6f,%.6f%s",
-                 i, trajectory[i].position, trajectory[i].velocity, trajectory[i].acceleration,
-                 (i == num_points - 1) ? "" : ";");
-        strcat(csv_buffer, line);
-    }
-
-    ESP_LOGI(LOG_TAG, "Trajectory CSV: index,position,velocity,acceleration; %s", csv_buffer);
-    free(csv_buffer);
-}
-
-/**
- * @brief Synchronizes the motor's target by forcing a fresh sensor read,
- *        then commands the motor to hold that position before entering motor mode.
- *
- * The function performs the following steps:
- * 1) Sends a dummy command to force the motor to reply with its sensor reading.
- * 2) Waits for a sensor reply from the motor.
- * 3) Unpacks the sensor reading and sends a hold command to update the motor's target.
- * 4) Finally, sends the enter motor mode command.
- *
- * @param motor_id The CAN identifier of the motor.
- */
-static void sync_and_engage_motor_control(int motor_id)
-{
-    // Step 1: Send a dummy command to force a sensor update.
-    uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
-    pack_cmd(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, dummy_cmd);
-    if (can_bus_transmit(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send dummy command for synchronization", motor_id);
-        return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(100)); // Allow time for the motor to process and respond
-
-    // Step 2: Wait for the sensor reply from the motor.
-    twai_message_t sensor_msg;
-    bool sensor_received = false;
-    const int max_attempts = 5;
-    for (int i = 0; i < max_attempts; i++)
-    {
-        if (can_bus_receive(&sensor_msg) == ESP_OK &&
-            sensor_msg.data_length_code == 6 && // Expect a 6-byte sensor reply
-            sensor_msg.identifier == motor_id)  // Verify the response comes from the correct motor
-        {
-            sensor_received = true;
-            break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    if (!sensor_received)
-    {
-        ESP_LOGE(LOG_TAG, "Motor ID %d: No sensor reply received during synchronization", motor_id);
-        return;
-    }
-
-    // Step 3: Unpack the sensor reading and send a hold command using that value.
-    motor_reply_t reply = {0};
-    unpack_reply(sensor_msg.data, &reply);
-    ESP_LOGI(LOG_TAG, "Motor ID %d: Sensor reading: position=%.4f, velocity=%.4f, current=%.2f",
-             motor_id, reply.position, reply.velocity, reply.current);
-
-    uint8_t hold_cmd[CAN_CMD_LENGTH] = {0};
-    // Build the hold command using the sensor reading as the target.
-    pack_cmd(reply.position, 0.0f, 10, 1, 0.0f, hold_cmd);
-    if (can_bus_transmit(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send hold command", motor_id);
-        return;
-    }
-    vTaskDelay(pdMS_TO_TICKS(50)); // Optional: wait a short moment for the hold command to take effect
-
-    // Step 4: Finally, send the enter motor mode command.
-    if (can_bus_send_enter_mode(motor_id) == ESP_OK)
-    {
-        ESP_LOGI(LOG_TAG, "Motor ID %d: Enter motor mode command sent successfully", motor_id);
-    }
-    else
-    {
-        ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send enter motor mode command", motor_id);
-    }
-}
-
-static void motion_control_task(void *arg)
-{
-    const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000));
-    for (;;)
-    {
-        if (trajectory_active && current_trajectory_index < current_trajectory_points)
-        {
-            motion_profile_point_t *pt = &current_trajectory[current_trajectory_index];
-
-            float kp_current = 0.0f;
-            float kd_current = 0.0f;
-
-            // Decide which KP/KD to use
-            switch (current_trajectory_motor_id)
-            {
-            case 1:
-                kp_current = KP1;
-                kd_current = KD1;
-                break;
-            case 2:
-                kp_current = KP2;
-                kd_current = KD2;
-                break;
-            case 3:
-                kp_current = KP3;
-                kd_current = KD3;
-                break;
-            default:
-                // fallback
-                kp_current = 0.0f;
-                kd_current = 0.0f;
-                break;
-            }
-
-            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
-            pack_cmd(pt->position, pt->velocity, kp_current, kd_current, 0.0f, can_msg_data);
-
-            if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, current_trajectory_motor_id) == ESP_OK)
-            {
-                ESP_LOGI(LOG_TAG, "Trajectory point %d/%d -> Motor %d | pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
-                         current_trajectory_index, current_trajectory_points, current_trajectory_motor_id,
-                         pt->position, pt->velocity, kp_current, kd_current);
-            }
-
-            current_trajectory_index++;
-            if (current_trajectory_index >= current_trajectory_points)
-            {
-                trajectory_active = false;
-                ESP_LOGI(LOG_TAG, "Trajectory completed.");
-            }
-        }
-
-        vTaskDelay(delay_ticks);
-    }
-
-    vTaskDelete(NULL);
-}
-
 void app_main(void)
 {
     esp_err_t ret = nvs_flash_init();
@@ -388,6 +172,8 @@ void app_main(void)
     can_bus_send_exit_mode(0x2);
     can_bus_send_exit_mode(0x3);
 
-    xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
-    xTaskCreate(motion_control_task, "motion_control_task", 4096, NULL, 10, NULL);
+    motor_control_init();
+    xTaskCreate(motor_control_task, "motor_control_task", 4096, NULL, 10, NULL);
+
+    xTaskCreate(can_bus_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
 }

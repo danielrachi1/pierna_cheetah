@@ -56,4 +56,15 @@ esp_err_t can_bus_send_exit_mode(int motor_id);
  */
 esp_err_t can_bus_send_zero_pos_sensor(int motor_id);
 
+/**
+ * @brief Task that continuously receives CAN messages and updates motor state.
+ *
+ * This task calls can_bus_receive() to get messages from the bus and then, if the
+ * message contains sufficient data, unpacks it and updates the corresponding motor's
+ * current position via the motor_control module.
+ *
+ * @param arg Unused.
+ */
+void can_bus_receive_task(void *arg);
+
 #endif // CAN_BUS_H

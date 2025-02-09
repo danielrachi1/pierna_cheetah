@@ -1,4 +1,6 @@
 #include "can_bus.h"
+#include "motor_control.h"
+#include "message_parser.h"
 #include "esp_log.h"
 #include <string.h>
 #include "driver/twai.h"
@@ -89,4 +91,35 @@ esp_err_t can_bus_send_zero_pos_sensor(int motor_id)
 {
     ESP_LOGI(LOG_TAG, "Sending Zero Position Sensor command to Motor ID %d", motor_id);
     return can_bus_transmit((uint8_t *)ZERO_POS_SENSOR_CMD, DATA_LENGTH, motor_id);
+}
+
+void can_bus_receive_task(void *arg)
+{
+    while (1) {
+        twai_message_t received_msg;
+        esp_err_t err = can_bus_receive(&received_msg);
+        if (err == ESP_OK) {
+            if (received_msg.data_length_code >= 5) {
+                motor_reply_t reply = {0};
+                unpack_reply(received_msg.data, &reply);
+                
+                // Update the corresponding motor's current position using per-motor state.
+                // motor_control_get_state() is defined in the motor_control module.
+                motor_state_t *state = motor_control_get_state(reply.motor_id);
+                if (state) {
+                    state->current_position = reply.position;
+                }
+                
+                ESP_LOGI(LOG_TAG, "Received CAN Message:");
+                ESP_LOGI(LOG_TAG, "  Motor ID: %d", reply.motor_id);
+                ESP_LOGI(LOG_TAG, "  Position: %.4f radians", reply.position);
+                ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", reply.velocity);
+                ESP_LOGI(LOG_TAG, "  Current: %.2f A", reply.current);
+            } else {
+                ESP_LOGE(LOG_TAG, "Received CAN message does not contain enough data to unpack");
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    vTaskDelete(NULL);
 }

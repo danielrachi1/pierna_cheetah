@@ -5,7 +5,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "message_parser.h"  // For processing POST commands
+#include "message_parser.h"
+#include "motor_control.h"
 
 #define TAG "HTTP_SERVER"
 #define FILEPATH_MAX 520
@@ -124,18 +125,10 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         free(buf);
         return ESP_FAIL;
     }
-
     free(buf);
 
-    /* For now we simply log the received command.
-       In a full refactor, you might forward the command to a motor-control module. */
-    if (strlen(special_command) > 0) {
-        ESP_LOGI(TAG, "Special command: %s for Motor ID: %d", special_command, command.motor_id);
-    } else {
-        ESP_LOGI(TAG, "Move command for Motor ID: %d", command.motor_id);
-        ESP_LOGI(TAG, "  Position: %.4f, Velocity: %.4f, kp: %.4f, kd: %.4f, FF torque: %.4f",
-                 command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque);
-    }
+    /* Forward the parsed command to the motor control module */
+    motor_control_handle_command(&command, special_command);
 
     httpd_resp_send(req, "Command received", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
