@@ -35,11 +35,6 @@ function sendPositionOnlyCommand() {
         return;
     }
 
-    // Invert the sign only if motor_id is 1
-    if (motor_id === 1) {
-        position_deg = -position_deg;
-    }
-
     var position_rad = degreesToRadians(position_deg);
 
     var command = {

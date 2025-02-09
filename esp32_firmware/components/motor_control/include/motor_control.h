@@ -52,6 +52,7 @@ void motor_control_task(void *arg);
  * @brief Synchronizes a motor's target (by forcing a sensor update) and enters motor mode.
  *
  * @param motor_id The identifier of the motor.
+ * @return esp_err_t ESP_OK on success or an error code.
  */
 esp_err_t sync_and_engage_motor_control(int motor_id);
 
@@ -63,8 +64,9 @@ esp_err_t sync_and_engage_motor_control(int motor_id);
  *
  * @param command Pointer to a motor_command_t structure.
  * @param special_command A string with a special command (if any).
+ * @return esp_err_t ESP_OK on success or an error code.
  */
-void motor_control_handle_command(const motor_command_t *command, const char *special_command);
+esp_err_t motor_control_handle_command(const motor_command_t *command, const char *special_command);
 
 #ifdef __cplusplus
 }

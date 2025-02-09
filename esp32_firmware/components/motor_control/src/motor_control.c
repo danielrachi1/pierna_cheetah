@@ -49,7 +49,7 @@ esp_err_t sync_and_engage_motor_control(int motor_id)
     motor_state_t *state = motor_control_get_state(motor_id);
     if (!state) {
         ESP_LOGE(LOG_TAG, "Invalid motor id %d", motor_id);
-        return ESP_FAIL;
+        return ESP_ERR_INVALID_ARG;
     }
 
     uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
@@ -104,7 +104,6 @@ esp_err_t sync_and_engage_motor_control(int motor_id)
     }
 }
 
-
 void motor_control_task(void *arg)
 {
     const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000));
@@ -140,55 +139,83 @@ void motor_control_task(void *arg)
     vTaskDelete(NULL);
 }
 
-void motor_control_handle_command(const motor_command_t *command, const char *special_command)
+/**
+ * @brief Processes an incoming motor command.
+ *
+ * For special commands ("ENTER_MODE", "EXIT_MODE", "ZERO_POS"), it calls the corresponding CAN commands.
+ * For a move (position) command (when special_command is empty), it generates an S‑curve trajectory.
+ *
+ * Additionally, for motor 1 the target position is inverted here.
+ */
+esp_err_t motor_control_handle_command(const motor_command_t *command, const char *special_command)
 {
     motor_state_t *state = motor_control_get_state(command->motor_id);
     if (!state) {
         ESP_LOGE(LOG_TAG, "Invalid motor id %d", command->motor_id);
-        return;
+        return ESP_ERR_INVALID_ARG;
     }
 
     if (special_command && strlen(special_command) > 0) {
         if (strcmp(special_command, "ENTER_MODE") == 0) {
             if (!state->engaged) {
-                // Only set engaged if synchronization succeeds.
-                if (sync_and_engage_motor_control(state->motor_id) == ESP_OK) {
+                esp_err_t err = sync_and_engage_motor_control(state->motor_id);
+                if (err == ESP_OK) {
                     state->engaged = true;
                     ESP_LOGI(LOG_TAG, "Motor ID %d engaged successfully.", state->motor_id);
+                    return ESP_OK;
                 } else {
                     ESP_LOGE(LOG_TAG, "Motor ID %d failed to engage.", state->motor_id);
+                    return err;
                 }
             } else {
                 ESP_LOGI(LOG_TAG, "Motor ID %d already engaged.", state->motor_id);
+                return ESP_OK;
             }
         } else if (strcmp(special_command, "EXIT_MODE") == 0) {
             if (state->engaged) {
-                if (can_bus_send_exit_mode(state->motor_id) == ESP_OK) {
+                esp_err_t err = can_bus_send_exit_mode(state->motor_id);
+                if (err == ESP_OK) {
                     ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully for Motor %d", state->motor_id);
                     state->engaged = false;
+                    return ESP_OK;
                 } else {
                     ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command for Motor %d", state->motor_id);
+                    return err;
                 }
             } else {
                 ESP_LOGI(LOG_TAG, "Motor ID %d already disengaged.", state->motor_id);
+                return ESP_OK;
             }
         } else if (strcmp(special_command, "ZERO_POS") == 0) {
             if (!state->engaged) {
-                if (can_bus_send_zero_pos_sensor(state->motor_id) == ESP_OK) {
+                esp_err_t err = can_bus_send_zero_pos_sensor(state->motor_id);
+                if (err == ESP_OK) {
                     ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully for Motor %d", state->motor_id);
+                    return ESP_OK;
                 } else {
                     ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command for Motor %d", state->motor_id);
+                    return err;
                 }
             } else {
                 ESP_LOGE(LOG_TAG, "Cannot set sensor zero while Motor %d is engaged! Command rejected.", state->motor_id);
+                return ESP_ERR_INVALID_STATE;
             }
+        } else {
+            ESP_LOGE(LOG_TAG, "Unknown special command: %s", special_command);
+            return ESP_ERR_INVALID_ARG;
         }
     } else {
         // Handle a move (position) command.
         if (!state->engaged) {
             ESP_LOGE(LOG_TAG, "Motor ID %d is not engaged. Please enter motor mode first.", state->motor_id);
-            return;
+            return ESP_ERR_INVALID_STATE;
         }
+        // For motor 1, invert the target position.
+        float target_position = command->position;
+        if (state->motor_id == 1) {
+            target_position = -target_position;
+        }
+        // Check if this is a simple position-only command.
         bool position_only = (command->velocity == 0.0f &&
                               command->kp == 0.0f &&
                               command->kd == 0.0f &&
@@ -203,16 +230,19 @@ void motor_control_handle_command(const motor_command_t *command, const char *sp
             }
             if (motion_profile_generate_s_curve(
                     state->current_position, 0.0f,
-                    command->position, 0.0f,
+                    target_position, 0.0f,
                     MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
                     &state->trajectory, &state->trajectory_points))
             {
                 ESP_LOGI(LOG_TAG, "Motor %d: S-curve trajectory generated with %d points", state->motor_id, state->trajectory_points);
                 state->trajectory_active = true;
                 state->trajectory_index = 0;
+                return ESP_OK;
             } else {
                 ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate S-curve trajectory", state->motor_id);
+                return ESP_FAIL;
             }
         }
+        return ESP_OK;
     }
 }
