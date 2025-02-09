@@ -6,7 +6,6 @@
 #include "esp_system.h"
 #include "esp_log.h"
 #include "driver/gpio.h"
-#include "driver/twai.h"
 #include "message_parser.h"
 #include "cJSON.h"
 #include "esp_wifi.h"
@@ -19,19 +18,12 @@
 #include "esp_spiffs.h"
 #include "motion_profile.h"
 #include "mdns.h"
+#include "can_bus.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 
 #define CAN_TASK_STACK_SIZE (4096)
 #define CAN_CMD_LENGTH 8 // CAN message length
-#define DATA_LENGTH 8
-
-// TWAI (CAN) Configuration
-#define TWAI_TX_GPIO_NUM (21)
-#define TWAI_RX_GPIO_NUM (22)
-#define TWAI_MODE TWAI_MODE_NORMAL
-#define TWAI_BIT_RATE TWAI_TIMING_CONFIG_1MBITS()
-#define TWAI_FILTER_CONFIG TWAI_FILTER_CONFIG_ACCEPT_ALL()
 
 // Wi-Fi Configuration
 #define WIFI_SSID CONFIG_WIFI_SSID
@@ -173,96 +165,12 @@ static void connect_wifi(void)
     vEventGroupDelete(s_wifi_event_group);
 }
 
-static void twai_init()
-{
-    twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(TWAI_TX_GPIO_NUM, TWAI_RX_GPIO_NUM, TWAI_MODE);
-    twai_timing_config_t t_config = TWAI_BIT_RATE;
-    twai_filter_config_t f_config = TWAI_FILTER_CONFIG;
-
-    esp_err_t err = twai_driver_install(&g_config, &t_config, &f_config);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to install TWAI driver: %s", esp_err_to_name(err));
-        return;
-    }
-    ESP_LOGI(LOG_TAG, "TWAI driver installed");
-
-    err = twai_start();
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to start TWAI driver: %s", esp_err_to_name(err));
-        return;
-    }
-    ESP_LOGI(LOG_TAG, "TWAI driver started");
-}
-
-static esp_err_t send_can_message(uint8_t *msg_data, size_t length, int motor_id)
-{
-    twai_message_t message = {0};
-    message.identifier = motor_id;
-    message.data_length_code = length;
-    memcpy(message.data, msg_data, length);
-
-    ESP_LOGI(LOG_TAG, "Sending TWAI Message to Motor ID %d:", motor_id);
-    ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message.identifier);
-    ESP_LOGI(LOG_TAG, "  Data Length: %d", message.data_length_code);
-    ESP_LOG_BUFFER_HEX(LOG_TAG, message.data, message.data_length_code);
-
-    esp_err_t err = twai_transmit(&message, pdMS_TO_TICKS(1000));
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(LOG_TAG, "TWAI transmit failed: %s", esp_err_to_name(err));
-    }
-    else
-    {
-        ESP_LOGI(LOG_TAG, "TWAI transmit successful");
-    }
-    return err;
-}
-
-static esp_err_t receive_can_message(twai_message_t *message)
-{
-    esp_err_t err = twai_receive(message, pdMS_TO_TICKS(1000));
-
-    if (err == ESP_OK)
-    {
-        ESP_LOGI(LOG_TAG, "Received TWAI Message:");
-        ESP_LOGI(LOG_TAG, "  ID: 0x%lx", message->identifier);
-        ESP_LOGI(LOG_TAG, "  Data Length: %d", message->data_length_code);
-        ESP_LOG_BUFFER_HEX(LOG_TAG, message->data, message->data_length_code);
-    }
-    else if (err != ESP_ERR_TIMEOUT)
-    {
-        ESP_LOGE(LOG_TAG, "TWAI receive failed: %s", esp_err_to_name(err));
-    }
-
-    return err;
-}
-
-static esp_err_t send_enter_motor_mode(int motor_id)
-{
-    ESP_LOGI(LOG_TAG, "Sending Enter Motor Mode command to Motor ID %d", motor_id);
-    return send_can_message((uint8_t *)ENTER_MOTOR_MODE_CMD, DATA_LENGTH, motor_id);
-}
-
-static esp_err_t send_exit_motor_mode(int motor_id)
-{
-    ESP_LOGI(LOG_TAG, "Sending Exit Motor Mode command to Motor ID %d", motor_id);
-    return send_can_message((uint8_t *)EXIT_MOTOR_MODE_CMD, DATA_LENGTH, motor_id);
-}
-
-static esp_err_t send_zero_position_sensor(int motor_id)
-{
-    ESP_LOGI(LOG_TAG, "Sending Zero Position Sensor command to Motor ID %d", motor_id);
-    return send_can_message((uint8_t *)ZERO_POS_SENSOR_CMD, DATA_LENGTH, motor_id);
-}
-
 static void can_receive_task(void *arg)
 {
     while (1)
     {
         twai_message_t received_msg;
-        esp_err_t err = receive_can_message(&received_msg);
+        esp_err_t err = can_bus_receive(&received_msg);
         if (err == ESP_OK)
         {
             if (received_msg.data_length_code >= 5)
@@ -413,7 +321,7 @@ static void sync_and_engage_motor_control(int motor_id)
     // Step 1: Send a dummy command to force a sensor update.
     uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
     pack_cmd(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, dummy_cmd);
-    if (send_can_message(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    if (can_bus_transmit(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send dummy command for synchronization", motor_id);
         return;
@@ -426,7 +334,7 @@ static void sync_and_engage_motor_control(int motor_id)
     const int max_attempts = 5;
     for (int i = 0; i < max_attempts; i++)
     {
-        if (receive_can_message(&sensor_msg) == ESP_OK &&
+        if (can_bus_receive(&sensor_msg) == ESP_OK &&
             sensor_msg.data_length_code == 6 && // Expect a 6-byte sensor reply
             sensor_msg.identifier == motor_id)  // Verify the response comes from the correct motor
         {
@@ -450,7 +358,7 @@ static void sync_and_engage_motor_control(int motor_id)
     uint8_t hold_cmd[CAN_CMD_LENGTH] = {0};
     // Build the hold command using the sensor reading as the target.
     pack_cmd(reply.position, 0.0f, 10, 1, 0.0f, hold_cmd);
-    if (send_can_message(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    if (can_bus_transmit(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send hold command", motor_id);
         return;
@@ -458,7 +366,7 @@ static void sync_and_engage_motor_control(int motor_id)
     vTaskDelay(pdMS_TO_TICKS(50)); // Optional: wait a short moment for the hold command to take effect
 
     // Step 4: Finally, send the enter motor mode command.
-    if (send_enter_motor_mode(motor_id) == ESP_OK)
+    if (can_bus_send_enter_mode(motor_id) == ESP_OK)
     {
         ESP_LOGI(LOG_TAG, "Motor ID %d: Enter motor mode command sent successfully", motor_id);
     }
@@ -531,7 +439,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
         {
             if (motor_engaged[command.motor_id])
             {
-                if (send_exit_motor_mode(command.motor_id) == ESP_OK)
+                if (can_bus_send_exit_mode(command.motor_id) == ESP_OK)
                 {
                     ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
                     motor_engaged[command.motor_id] = false;
@@ -551,7 +459,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
             // Allow ZERO_POS only when motor is unlocked.
             if (!motor_engaged[command.motor_id])
             {
-                if (send_zero_position_sensor(command.motor_id) == ESP_OK)
+                if (can_bus_send_zero_pos_sensor(command.motor_id) == ESP_OK)
                 {
                     ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
                 }
@@ -622,7 +530,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
             pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
 
-            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
+            if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Direct CAN message sent successfully to Motor ID %d", command.motor_id);
             }
@@ -709,7 +617,7 @@ static void motion_control_task(void *arg)
             uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
             pack_cmd(pt->position, pt->velocity, kp_current, kd_current, 0.0f, can_msg_data);
 
-            if (send_can_message(can_msg_data, CAN_CMD_LENGTH, current_trajectory_motor_id) == ESP_OK)
+            if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, current_trajectory_motor_id) == ESP_OK)
             {
                 ESP_LOGI(LOG_TAG, "Trajectory point %d/%d -> Motor %d | pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
                          current_trajectory_index, current_trajectory_points, current_trajectory_motor_id,
@@ -755,7 +663,7 @@ void app_main(void)
     }
     ESP_LOGI(LOG_TAG, "SPIFFS mounted successfully");
 
-    twai_init();
+    ESP_ERROR_CHECK(can_bus_init());
     start_webserver();
 
     // Initialize mDNS
@@ -766,9 +674,9 @@ void app_main(void)
     ESP_LOGI(LOG_TAG, "mDNS started. You can now access http://cheetah.local/");
 
     // On boot, force all motors to exit motor mode (flag remains false)
-    send_exit_motor_mode(0x1);
-    send_exit_motor_mode(0x2);
-    send_exit_motor_mode(0x3);
+    can_bus_send_exit_mode(0x1);
+    can_bus_send_exit_mode(0x2);
+    can_bus_send_exit_mode(0x3);
 
     xTaskCreate(can_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
     xTaskCreate(motion_control_task, "motion_control_task", 4096, NULL, 10, NULL);
