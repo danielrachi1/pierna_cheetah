@@ -5,16 +5,13 @@
     <meta charset="UTF-8">
     <title>ESP32 Motor Controller</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="style.css">
-    <!-- Link to the external JavaScript file -->
     <script src="script.js" defer></script>
 </head>
 
 <body>
     <h1>ESP32 Motor Controller</h1>
 
-    <!-- Notification Container -->
     <div id="notification" class="hidden"></div>
 
     <!-- Special Commands Section -->
@@ -51,57 +48,10 @@
         <div class="form-group">
             <label for="position_only" class="field-label">Position</label>
             <div class="field-subtitle">between 0 and 360 degrees</div>
-            <input type="number" id="position_only" name="position_only" min="0" max="360" step="0.1" value="0" required>
+            <input type="number" id="position_only" name="position_only" min="0" max="360" step="0.1" value="0"
+                required>
         </div>
         <button class="btn" onclick="sendPositionOnlyCommand()">Set Position</button>
-    </section>
-
-    <!-- Advanced Command Section (Collapsible) -->
-    <section class="command-section">
-        <h2 class="collapsible-header" onclick="toggleAdvancedSection()">Advanced Command ▼</h2>
-        <p class="warning">Warning: This section sends a direct command to the motor with no motion profile. Use with care! Incorrect parameters may cause sudden and dangerous movements.</p>
-        <div id="advanced-section" class="hidden-section">
-            <div class="form-group">
-                <label for="motor_id_command" class="field-label">Motor ID</label>
-                <select id="motor_id_command" name="motor_id_command" required>
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="position_advanced" class="field-label">Position</label>
-                <div class="field-subtitle">between -95.5 and 95.5 radians</div>
-                <input type="number" id="position_advanced" name="position_advanced" min="-95.5" max="95.5" step="0.0001" value="0" required>
-            </div>
-
-            <div class="form-group">
-                <label for="velocity_advanced" class="field-label">Velocity</label>
-                <div class="field-subtitle">between -45 and 45 rad/s</div>
-                <input type="number" id="velocity_advanced" name="velocity_advanced" min="-45" max="45" step="0.0001" value="0" required>
-            </div>
-
-            <div class="form-group">
-                <label for="kp_advanced" class="field-label">Kp</label>
-                <div class="field-subtitle">between 0 and 500 N·m/rad</div>
-                <input type="number" id="kp_advanced" name="kp_advanced" min="0" max="500" step="0.0001" value="0" required>
-            </div>
-
-            <div class="form-group">
-                <label for="kd_advanced" class="field-label">Kd</label>
-                <div class="field-subtitle">between 0 and 5 N·m·s/rad</div>
-                <input type="number" id="kd_advanced" name="kd_advanced" min="0" max="5" step="0.0001" value="0" required>
-            </div>
-
-            <div class="form-group">
-                <label for="torque_advanced" class="field-label">Feed-Forward Torque</label>
-                <div class="field-subtitle">between -18 and 18 N·m</div>
-                <input type="number" id="torque_advanced" name="torque_advanced" min="-18" max="18" step="0.0001" value="0" required>
-            </div>
-
-            <button class="btn" onclick="sendAdvancedCommand()">Send Advanced Command</button>
-        </div>
     </section>
 </body>
 

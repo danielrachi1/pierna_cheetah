@@ -204,21 +204,6 @@ void motor_control_handle_command(const motor_command_t *command, const char *sp
             } else {
                 ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate S-curve trajectory", state->motor_id);
             }
-        } else {
-            ESP_LOGW(LOG_TAG, "WARNING: Advanced command used. This can be dangerous!");
-            ESP_LOGI(LOG_TAG, "Motor %d: Parsed Command Data:", state->motor_id);
-            ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command->position);
-            ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command->velocity);
-            ESP_LOGI(LOG_TAG, "  kp: %.4f", command->kp);
-            ESP_LOGI(LOG_TAG, "  kd: %.4f", command->kd);
-            ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command->feed_forward_torque);
-            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
-            pack_cmd(command->position, command->velocity, command->kp, command->kd, command->feed_forward_torque, can_msg_data);
-            if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, state->motor_id) == ESP_OK) {
-                ESP_LOGI(LOG_TAG, "Direct CAN message sent successfully to Motor %d", state->motor_id);
-            } else {
-                ESP_LOGE(LOG_TAG, "Failed to send direct CAN message to Motor %d", state->motor_id);
-            }
         }
     }
 }

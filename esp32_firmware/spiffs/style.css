@@ -38,13 +38,6 @@ h2 {
     margin-bottom: 20px;
 }
 
-.collapsible-header {
-    cursor: pointer;
-    user-select: none;
-    margin-bottom: 10px;
-    border-bottom: none;
-}
-
 .form-group {
     margin-bottom: 15px;
 }
@@ -148,20 +141,4 @@ select:focus {
 #notification.hidden {
     opacity: 0;
     transform: translateY(-20px);
-}
-
-/* Warning paragraph style */
-.warning {
-    color: #FF9800;
-    margin-bottom: 20px;
-    font-weight: bold;
-}
-
-/* Collapsible Section */
-.hidden-section {
-    display: none;
-}
-
-.hidden-section.show {
-    display: block;
 }
