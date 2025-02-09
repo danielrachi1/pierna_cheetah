@@ -130,7 +130,7 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     /* Forward the parsed command to the motor control module */
     motor_control_handle_command(&command, special_command);
 
-    httpd_resp_send(req, "Command received", HTTPD_RESP_USE_STRLEN);
+    httpd_resp_send(req, "Command sent", HTTPD_RESP_USE_STRLEN);
     return ESP_OK;
 }
 
