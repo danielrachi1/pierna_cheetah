@@ -12,13 +12,14 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 #include "esp_netif.h"
-#include "esp_http_server.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "esp_spiffs.h"
 #include "motion_profile.h"
 #include "mdns.h"
+
 #include "can_bus.h"
+#include "http_server.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 
@@ -217,93 +218,6 @@ static void log_trajectory_csv(motion_profile_point_t *trajectory, int num_point
     free(csv_buffer);
 }
 
-static esp_err_t root_get_handler(httpd_req_t *req)
-{
-    FILE *f = fopen("/spiffs/index.html", "r");
-    if (f == NULL)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to open index.html");
-        httpd_resp_send_404(req);
-        return ESP_FAIL;
-    }
-
-    httpd_resp_set_type(req, "text/html");
-
-    char buffer[512];
-    size_t read_bytes;
-    do
-    {
-        read_bytes = fread(buffer, 1, sizeof(buffer), f);
-        if (read_bytes > 0)
-        {
-            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
-            {
-                fclose(f);
-                ESP_LOGE(LOG_TAG, "File sending failed!");
-                httpd_resp_sendstr_chunk(req, NULL);
-                httpd_resp_send_500(req);
-                return ESP_FAIL;
-            }
-        }
-    } while (read_bytes > 0);
-
-    fclose(f);
-    httpd_resp_send_chunk(req, NULL, 0);
-    return ESP_OK;
-}
-
-static esp_err_t file_get_handler(httpd_req_t *req)
-{
-    char filepath[FILEPATH_MAX];
-    snprintf(filepath, sizeof(filepath), "/spiffs%s", req->uri);
-
-    FILE *f = fopen(filepath, "r");
-    if (f == NULL)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to open file : %s", filepath);
-        httpd_resp_send_404(req);
-        return ESP_FAIL;
-    }
-
-    const char *type = "text/plain";
-    if (strstr(req->uri, ".css"))
-    {
-        type = "text/css";
-    }
-    else if (strstr(req->uri, ".js"))
-    {
-        type = "application/javascript";
-    }
-    else if (strstr(req->uri, ".html"))
-    {
-        type = "text/html";
-    }
-
-    httpd_resp_set_type(req, type);
-
-    char buffer[512];
-    size_t read_bytes;
-    do
-    {
-        read_bytes = fread(buffer, 1, sizeof(buffer), f);
-        if (read_bytes > 0)
-        {
-            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
-            {
-                fclose(f);
-                ESP_LOGE(LOG_TAG, "File sending failed!");
-                httpd_resp_sendstr_chunk(req, NULL);
-                httpd_resp_send_500(req);
-                return ESP_FAIL;
-            }
-        }
-    } while (read_bytes > 0);
-
-    fclose(f);
-    httpd_resp_send_chunk(req, NULL, 0);
-    return ESP_OK;
-}
-
 /**
  * @brief Synchronizes the motor's target by forcing a fresh sensor read,
  *        then commands the motor to hold that position before entering motor mode.
@@ -374,210 +288,6 @@ static void sync_and_engage_motor_control(int motor_id)
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send enter motor mode command", motor_id);
     }
-}
-
-static esp_err_t send_command_post_handler(httpd_req_t *req)
-{
-    int total_len = req->content_len;
-    int cur_len = 0;
-    int received = 0;
-    char *buf = malloc(total_len + 1);
-    if (!buf)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to allocate memory for POST buffer");
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate memory");
-        return ESP_FAIL;
-    }
-
-    while (cur_len < total_len)
-    {
-        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (received <= 0)
-        {
-            if (received == HTTPD_SOCK_ERR_TIMEOUT)
-            {
-                continue;
-            }
-            free(buf);
-            return ESP_FAIL;
-        }
-        cur_len += received;
-    }
-    buf[total_len] = '\0';
-
-    ESP_LOGI(LOG_TAG, "Received POST data: %s", buf);
-
-    motor_command_t command = {0};
-    char special_command[BUF_SIZE] = {0};
-
-    if (!parse_json_command(buf, &command, special_command))
-    {
-        ESP_LOGE(LOG_TAG, "Failed to parse JSON command");
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON command");
-        free(buf);
-        return ESP_FAIL;
-    }
-
-    free(buf);
-
-    if (strlen(special_command) > 0)
-    {
-        if (strcmp(special_command, "ENTER_MODE") == 0)
-        {
-            // If not engaged, engage the motor and set flag to true.
-            if (!motor_engaged[command.motor_id])
-            {
-                sync_and_engage_motor_control(command.motor_id);
-                motor_engaged[command.motor_id] = true;
-            }
-            else
-            {
-                ESP_LOGI(LOG_TAG, "Motor ID %d already engaged.", command.motor_id);
-            }
-        }
-        else if (strcmp(special_command, "EXIT_MODE") == 0)
-        {
-            if (motor_engaged[command.motor_id])
-            {
-                if (can_bus_send_exit_mode(command.motor_id) == ESP_OK)
-                {
-                    ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully");
-                    motor_engaged[command.motor_id] = false;
-                }
-                else
-                {
-                    ESP_LOGE(LOG_TAG, "Failed to send Exit Motor Mode command");
-                }
-            }
-            else
-            {
-                ESP_LOGI(LOG_TAG, "Motor ID %d already disengaged.", command.motor_id);
-            }
-        }
-        else if (strcmp(special_command, "ZERO_POS") == 0)
-        {
-            // Allow ZERO_POS only when motor is unlocked.
-            if (!motor_engaged[command.motor_id])
-            {
-                if (can_bus_send_zero_pos_sensor(command.motor_id) == ESP_OK)
-                {
-                    ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully");
-                }
-                else
-                {
-                    ESP_LOGE(LOG_TAG, "Failed to send Zero Position Sensor command");
-                }
-            }
-            else
-            {
-                ESP_LOGE(LOG_TAG, "Cannot set sensor zero while motor is engaged! Command rejected.");
-            }
-        }
-    }
-    else
-    {
-        // For move (position) commands.
-        if (!motor_engaged[command.motor_id])
-        {
-            ESP_LOGE(LOG_TAG, "Motor ID %d is not engaged. Please enter motor mode first.", command.motor_id);
-            httpd_resp_send(req, "Motor not engaged", HTTPD_RESP_USE_STRLEN);
-            return ESP_OK;
-        }
-
-        bool position_only = (command.velocity == 0.0f &&
-                              command.kp == 0.0f &&
-                              command.kd == 0.0f &&
-                              command.feed_forward_torque == 0.0f);
-
-        if (position_only)
-        {
-            if (current_trajectory)
-            {
-                motion_profile_free_trajectory(current_trajectory);
-                current_trajectory = NULL;
-                current_trajectory_points = 0;
-                current_trajectory_index = 0;
-                trajectory_active = false;
-            }
-
-            current_trajectory_motor_id = command.motor_id;
-
-            if (motion_profile_generate_s_curve(
-                    current_motor_position, 0.0f, command.position, 0.0f,
-                    MP_DEFAULT_MAX_VEL, MP_DEFAULT_MAX_ACC, MP_DEFAULT_MAX_JERK, MP_TIME_STEP,
-                    &current_trajectory, &current_trajectory_points))
-            {
-                ESP_LOGI(LOG_TAG, "S-curve trajectory generated with %d points", current_trajectory_points);
-                log_trajectory_csv(current_trajectory, current_trajectory_points);
-                trajectory_active = true;
-                current_trajectory_index = 0;
-            }
-            else
-            {
-                ESP_LOGE(LOG_TAG, "Failed to generate s-curve trajectory");
-            }
-        }
-        else
-        {
-            ESP_LOGW(LOG_TAG, "WARNING: Advanced command used. This can be dangerous!");
-            ESP_LOGI(LOG_TAG, "Parsed Command Data:");
-            ESP_LOGI(LOG_TAG, "  Position: %.4f radians", command.position);
-            ESP_LOGI(LOG_TAG, "  Velocity: %.4f rad/s", command.velocity);
-            ESP_LOGI(LOG_TAG, "  kp: %.4f", command.kp);
-            ESP_LOGI(LOG_TAG, "  kd: %.4f", command.kd);
-            ESP_LOGI(LOG_TAG, "  Feed-Forward Torque: %.4f N-m", command.feed_forward_torque);
-
-            uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
-            pack_cmd(command.position, command.velocity, command.kp, command.kd, command.feed_forward_torque, can_msg_data);
-
-            if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, command.motor_id) == ESP_OK)
-            {
-                ESP_LOGI(LOG_TAG, "Direct CAN message sent successfully to Motor ID %d", command.motor_id);
-            }
-            else
-            {
-                ESP_LOGE(LOG_TAG, "Failed to send direct CAN message");
-            }
-        }
-    }
-
-    return ESP_OK;
-}
-
-httpd_uri_t uri_root = {
-    .uri = "/",
-    .method = HTTP_GET,
-    .handler = root_get_handler,
-    .user_ctx = NULL};
-
-httpd_uri_t uri_send_command = {
-    .uri = "/send_command",
-    .method = HTTP_POST,
-    .handler = send_command_post_handler,
-    .user_ctx = NULL};
-
-httpd_uri_t file_uri = {
-    .uri = "/*",
-    .method = HTTP_GET,
-    .handler = file_get_handler,
-    .user_ctx = NULL};
-
-static httpd_handle_t start_webserver(void)
-{
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.uri_match_fn = httpd_uri_match_wildcard;
-
-    httpd_handle_t server = NULL;
-    if (httpd_start(&server, &config) == ESP_OK)
-    {
-        httpd_register_uri_handler(server, &uri_root);
-        httpd_register_uri_handler(server, &uri_send_command);
-        httpd_register_uri_handler(server, &file_uri);
-        return server;
-    }
-
-    ESP_LOGI(LOG_TAG, "Error starting server!");
-    return NULL;
 }
 
 static void motion_control_task(void *arg)
@@ -664,7 +374,7 @@ void app_main(void)
     ESP_LOGI(LOG_TAG, "SPIFFS mounted successfully");
 
     ESP_ERROR_CHECK(can_bus_init());
-    start_webserver();
+    http_server_start();
 
     // Initialize mDNS
     ESP_ERROR_CHECK(mdns_init());
