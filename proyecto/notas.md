@@ -410,3 +410,17 @@ El home del robot será la posición en la que puede descansar con los motores a
 Probé el pulley case en el laboratorio y tenía varios problemas. Así que lo arregé / volví a diseñar.
 
 Pedí un paquete de conectores GH 1.25 por Amazon. Estoy casi seguro de que este incluye el conector necesario. En caso que no sea así, solo me queda pedir por Aliexpress y esperar que lo entreguen a tiempo.
+
+## 2025-02-07
+
+Seguí mejorando el Pulley Case.
+
+## 2025-02-08
+
+Hice un refactor completo del Firmware de la ESP32. El archivo main se estaba volviendo muy grande y desordenado, así que dividí su funcionalidad en varios componentes.
+
+## 2025-02-09
+
+Realicé mejoras varias al Firware de la ESP32.
+
+Expuse la API que permitirá programar rutinas de movimiento.
