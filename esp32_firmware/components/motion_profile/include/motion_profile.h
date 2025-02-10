@@ -30,17 +30,18 @@
 
 /* Configuration Parameters (can be adjusted as needed) */
 // BE VERY CAREFUL WHEN CHANGING THESE VALUES THE MOTORS WILL MOVE *FAST*
-#define MP_DEFAULT_MAX_VEL   5.0f   ///< Default maximum velocity (rad/s)
-#define MP_DEFAULT_MAX_ACC   10.0f  ///< Default maximum acceleration (rad/s^2)
-#define MP_DEFAULT_MAX_JERK  50.0f  ///< Default maximum jerk (rad/s^3)
-#define MP_TIME_STEP         0.01f  ///< Default time step for trajectory generation (seconds)
+#define MP_DEFAULT_MAX_VEL 5.0f   ///< Default maximum velocity (rad/s)
+#define MP_DEFAULT_MAX_ACC 10.0f  ///< Default maximum acceleration (rad/s^2)
+#define MP_DEFAULT_MAX_JERK 50.0f ///< Default maximum jerk (rad/s^3)
+#define MP_TIME_STEP 0.01f        ///< Default time step for trajectory generation (seconds)
 
 /**
  * @brief A single trajectory point in the S-curve profile.
  */
-typedef struct {
-    float position;   ///< Position setpoint (radians)
-    float velocity;   ///< Velocity setpoint (rad/s)
+typedef struct
+{
+    float position;     ///< Position setpoint (radians)
+    float velocity;     ///< Velocity setpoint (rad/s)
     float acceleration; ///< Acceleration setpoint (rad/s^2)
 } motion_profile_point_t;
 

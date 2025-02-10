@@ -4,18 +4,18 @@
 #include "esp_netif.h"
 #include "esp_log.h"
 #include "freertos/event_groups.h"
-#include "mdns.h"  // Include mDNS
+#include "mdns.h" // Include mDNS
 
 static const char *TAG = "WIFI_MANAGER";
 
 /* Use the same configuration values defined in menuconfig */
-#define WIFI_SSID             CONFIG_WIFI_SSID
-#define WIFI_PASS             CONFIG_WIFI_PASSWORD
-#define WIFI_MAXIMUM_RETRY    CONFIG_WIFI_MAXIMUM_RETRY
+#define WIFI_SSID CONFIG_WIFI_SSID
+#define WIFI_PASS CONFIG_WIFI_PASSWORD
+#define WIFI_MAXIMUM_RETRY CONFIG_WIFI_MAXIMUM_RETRY
 
 /* Event group bits used to signal when connected or failed */
-#define WIFI_CONNECTED_BIT    BIT0
-#define WIFI_FAIL_BIT         BIT1
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT BIT1
 
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
@@ -24,21 +24,27 @@ static int s_retry_num = 0;
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+    {
         esp_wifi_connect();
     }
-    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < WIFI_MAXIMUM_RETRY) {
+    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
+    {
+        if (s_retry_num < WIFI_MAXIMUM_RETRY)
+        {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "Retrying to connect to the AP");
-        } else {
+        }
+        else
+        {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
         ESP_LOGI(TAG, "Failed to connect to the AP");
     }
-    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
+    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+    {
+        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "Got IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
@@ -80,11 +86,16 @@ esp_err_t wifi_manager_start(void)
                                            pdFALSE,
                                            portMAX_DELAY);
 
-    if (bits & WIFI_CONNECTED_BIT) {
+    if (bits & WIFI_CONNECTED_BIT)
+    {
         ESP_LOGI(TAG, "Connected to AP SSID: %s", WIFI_SSID);
-    } else if (bits & WIFI_FAIL_BIT) {
+    }
+    else if (bits & WIFI_FAIL_BIT)
+    {
         ESP_LOGI(TAG, "Failed to connect to SSID: %s", WIFI_SSID);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Unexpected event");
     }
 
@@ -98,22 +109,26 @@ esp_err_t wifi_manager_start(void)
 esp_err_t wifi_manager_setup_mdns(void)
 {
     esp_err_t err = mdns_init();
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "mDNS init failed: %s", esp_err_to_name(err));
         return err;
     }
     err = mdns_hostname_set("cheetah");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "mDNS hostname set failed: %s", esp_err_to_name(err));
         return err;
     }
     err = mdns_instance_name_set("Cheetah Leg Controller");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "mDNS instance name set failed: %s", esp_err_to_name(err));
         return err;
     }
     err = mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         ESP_LOGE(TAG, "mDNS service add failed: %s", esp_err_to_name(err));
         return err;
     }

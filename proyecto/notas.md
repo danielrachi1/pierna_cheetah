@@ -132,8 +132,6 @@ Ahora que tengo un código que sé que funciona en la ESP con el transciever, me
 
 ## 2024-11-12
 
-Para entender el código del ejemplo, utilicé [este chat](https://chatgpt.com/share/6734db3a-a838-8003-9c52-b4395c54cb12) para explicar/aclarar algunos puntos que no me quedaban muy claros.
-
 Edité el código para que la ESP32 solo recibiera paquetes, pero no funcionó. Como el ejemplo de enviarse paquetes a sí misma sí funciona, es seguro asumir que este es un problema con el Arduino o el MCP2515.
 
 Ahora que entiendo cómo leer CAN frames desde la ESP32, procederé a entender qué datos puedo intercambiar con los motores. Para luego conectarlos a mi prototipo.
@@ -166,7 +164,7 @@ Para lograr esto, debo entender cómo:
 - Convertir los datos enviados por serial a un paquete CAN.
 - Enviar y recibir paquetes CAN.
 
-Para lo primero, escribí dos programas sencillos. Uno en el IDE de Arduino y el otro usando ESP-IDF. Ambos se pueden encontrar en `experimentos/serial/`. Lo único destacable a mencioar acá es que se debieron hacer algunos [ajustes a la configuración](https://chatgpt.com/share/673fb215-b978-8003-8f16-062069c2e3a0) del ejemplo dado por espressif para que la esp32 usara el puerto serial por USB y no por los pines predeterminados del ejemplo: UART Port Number: 0, UART TX Pin: 1 UART RX Pin: 3.
+Para lo primero, escribí dos programas sencillos. Uno en el IDE de Arduino y el otro usando ESP-IDF. Ambos se pueden encontrar en `experimentos/serial/`. Lo único destacable a mencioar acá es que se debieron hacer algunos ajustes a la configuración del ejemplo dado por espressif para que la esp32 usara el puerto serial por USB y no por los pines predeterminados del ejemplo: UART Port Number: 0, UART TX Pin: 1 UART RX Pin: 3.
 
 ## 2024-11-22
 

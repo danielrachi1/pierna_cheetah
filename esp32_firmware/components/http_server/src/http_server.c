@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include "message_parser.h"
 #include "motor_control.h"
-#include <math.h>  // for M_PI
+#include <math.h> // for M_PI
 
 #define TAG "HTTP_SERVER"
 #define FILEPATH_MAX 520
@@ -17,7 +17,8 @@
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
     FILE *f = fopen("/spiffs/index.html", "r");
-    if (f == NULL) {
+    if (f == NULL)
+    {
         ESP_LOGE(TAG, "Failed to open index.html");
         httpd_resp_send_404(req);
         return ESP_FAIL;
@@ -27,10 +28,13 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
     char buffer[512];
     size_t read_bytes;
-    do {
+    do
+    {
         read_bytes = fread(buffer, 1, sizeof(buffer), f);
-        if (read_bytes > 0) {
-            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK) {
+        if (read_bytes > 0)
+        {
+            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
+            {
                 fclose(f);
                 ESP_LOGE(TAG, "File sending failed!");
                 httpd_resp_sendstr_chunk(req, NULL);
@@ -52,18 +56,24 @@ static esp_err_t file_get_handler(httpd_req_t *req)
     snprintf(filepath, sizeof(filepath), "/spiffs%s", req->uri);
 
     FILE *f = fopen(filepath, "r");
-    if (f == NULL) {
+    if (f == NULL)
+    {
         ESP_LOGE(TAG, "Failed to open file : %s", filepath);
         httpd_resp_send_404(req);
         return ESP_FAIL;
     }
 
     const char *type = "text/plain";
-    if (strstr(req->uri, ".css")) {
+    if (strstr(req->uri, ".css"))
+    {
         type = "text/css";
-    } else if (strstr(req->uri, ".js")) {
+    }
+    else if (strstr(req->uri, ".js"))
+    {
         type = "application/javascript";
-    } else if (strstr(req->uri, ".html")) {
+    }
+    else if (strstr(req->uri, ".html"))
+    {
         type = "text/html";
     }
 
@@ -71,10 +81,13 @@ static esp_err_t file_get_handler(httpd_req_t *req)
 
     char buffer[512];
     size_t read_bytes;
-    do {
+    do
+    {
         read_bytes = fread(buffer, 1, sizeof(buffer), f);
-        if (read_bytes > 0) {
-            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK) {
+        if (read_bytes > 0)
+        {
+            if (httpd_resp_send_chunk(req, buffer, read_bytes) != ESP_OK)
+            {
                 fclose(f);
                 ESP_LOGE(TAG, "File sending failed!");
                 httpd_resp_sendstr_chunk(req, NULL);
@@ -96,16 +109,20 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     int cur_len = 0;
     int received = 0;
     char *buf = malloc(total_len + 1);
-    if (!buf) {
+    if (!buf)
+    {
         ESP_LOGE(TAG, "Failed to allocate memory for POST buffer");
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate memory");
         return ESP_FAIL;
     }
 
-    while (cur_len < total_len) {
+    while (cur_len < total_len)
+    {
         received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
-        if (received <= 0) {
-            if (received == HTTPD_SOCK_ERR_TIMEOUT) {
+        if (received <= 0)
+        {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT)
+            {
                 continue;
             }
             free(buf);
@@ -120,7 +137,8 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
     motor_command_t command = {0};
     char special_command[BUF_SIZE] = {0};
 
-    if (!parse_json_command(buf, &command, special_command)) {
+    if (!parse_json_command(buf, &command, special_command))
+    {
         ESP_LOGE(TAG, "Failed to parse JSON command");
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON command");
         free(buf);
@@ -130,7 +148,8 @@ static esp_err_t send_command_post_handler(httpd_req_t *req)
 
     /* Forward the parsed command to the motor control module */
     esp_err_t err = motor_control_handle_command(&command, special_command);
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Motor command failed");
         return ESP_FAIL;
     }
@@ -147,7 +166,8 @@ static esp_err_t api_enter_motor_mode_handler(httpd_req_t *req)
     const char *uri = req->uri;
     const char *id_str = uri + strlen("/api/enter-motor-mode/");
     int motor_id = atoi(id_str);
-    if (motor_id < 1 || motor_id > NUM_MOTORS) {
+    if (motor_id < 1 || motor_id > NUM_MOTORS)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid motor ID");
         return ESP_FAIL;
     }
@@ -155,7 +175,8 @@ static esp_err_t api_enter_motor_mode_handler(httpd_req_t *req)
     motor_command_t command = {0};
     command.motor_id = motor_id;
     esp_err_t err = motor_control_handle_command(&command, "ENTER_MODE");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to enter motor mode");
         return ESP_FAIL;
     }
@@ -169,7 +190,8 @@ static esp_err_t api_exit_motor_mode_handler(httpd_req_t *req)
     const char *uri = req->uri;
     const char *id_str = uri + strlen("/api/exit-motor-mode/");
     int motor_id = atoi(id_str);
-    if (motor_id < 1 || motor_id > NUM_MOTORS) {
+    if (motor_id < 1 || motor_id > NUM_MOTORS)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid motor ID");
         return ESP_FAIL;
     }
@@ -177,7 +199,8 @@ static esp_err_t api_exit_motor_mode_handler(httpd_req_t *req)
     motor_command_t command = {0};
     command.motor_id = motor_id;
     esp_err_t err = motor_control_handle_command(&command, "EXIT_MODE");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to exit motor mode");
         return ESP_FAIL;
     }
@@ -191,7 +214,8 @@ static esp_err_t api_set_sensor_zero_pos_handler(httpd_req_t *req)
     const char *uri = req->uri;
     const char *id_str = uri + strlen("/api/set-sensor-zero-pos/");
     int motor_id = atoi(id_str);
-    if (motor_id < 1 || motor_id > NUM_MOTORS) {
+    if (motor_id < 1 || motor_id > NUM_MOTORS)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid motor ID");
         return ESP_FAIL;
     }
@@ -199,7 +223,8 @@ static esp_err_t api_set_sensor_zero_pos_handler(httpd_req_t *req)
     motor_command_t command = {0};
     command.motor_id = motor_id;
     esp_err_t err = motor_control_handle_command(&command, "ZERO_POS");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to set sensor zero position");
         return ESP_FAIL;
     }
@@ -213,15 +238,18 @@ static esp_err_t api_move_to_pos_handler(httpd_req_t *req)
     const char *uri = req->uri;
     int motor_id;
     float angle_deg;
-    if (sscanf(uri, "/api/move-to-pos/%d/%f", &motor_id, &angle_deg) != 2) {
+    if (sscanf(uri, "/api/move-to-pos/%d/%f", &motor_id, &angle_deg) != 2)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid URI format");
         return ESP_FAIL;
     }
-    if (motor_id < 1 || motor_id > NUM_MOTORS) {
+    if (motor_id < 1 || motor_id > NUM_MOTORS)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid motor ID");
         return ESP_FAIL;
     }
-    if (angle_deg < 0 || angle_deg > 360) {
+    if (angle_deg < 0 || angle_deg > 360)
+    {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Angle must be between 0 and 360 degrees");
         return ESP_FAIL;
     }
@@ -233,7 +261,8 @@ static esp_err_t api_move_to_pos_handler(httpd_req_t *req)
     command.position = angle_rad;
     // Note: Do not invert the angle here—the motor_control module will handle inversion for motor 1.
     esp_err_t err = motor_control_handle_command(&command, "");
-    if (err != ESP_OK) {
+    if (err != ESP_OK)
+    {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to generate move command");
         return ESP_FAIL;
     }
@@ -243,54 +272,47 @@ static esp_err_t api_move_to_pos_handler(httpd_req_t *req)
 
 /* Define URI handlers */
 static httpd_uri_t uri_root = {
-    .uri       = "/",
-    .method    = HTTP_GET,
-    .handler   = root_get_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/",
+    .method = HTTP_GET,
+    .handler = root_get_handler,
+    .user_ctx = NULL};
 
 static httpd_uri_t uri_send_command = {
-    .uri       = "/send_command",
-    .method    = HTTP_POST,
-    .handler   = send_command_post_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/send_command",
+    .method = HTTP_POST,
+    .handler = send_command_post_handler,
+    .user_ctx = NULL};
 
 static httpd_uri_t uri_api_enter_motor_mode = {
-    .uri       = "/api/enter-motor-mode/*",
-    .method    = HTTP_GET,
-    .handler   = api_enter_motor_mode_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/enter-motor-mode/*",
+    .method = HTTP_GET,
+    .handler = api_enter_motor_mode_handler,
+    .user_ctx = NULL};
 
 static httpd_uri_t uri_api_exit_motor_mode = {
-    .uri       = "/api/exit-motor-mode/*",
-    .method    = HTTP_GET,
-    .handler   = api_exit_motor_mode_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/exit-motor-mode/*",
+    .method = HTTP_GET,
+    .handler = api_exit_motor_mode_handler,
+    .user_ctx = NULL};
 
 static httpd_uri_t uri_api_set_sensor_zero_pos = {
-    .uri       = "/api/set-sensor-zero-pos/*",
-    .method    = HTTP_GET,
-    .handler   = api_set_sensor_zero_pos_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/set-sensor-zero-pos/*",
+    .method = HTTP_GET,
+    .handler = api_set_sensor_zero_pos_handler,
+    .user_ctx = NULL};
 
 static httpd_uri_t uri_api_move_to_pos = {
-    .uri       = "/api/move-to-pos/*",
-    .method    = HTTP_GET,
-    .handler   = api_move_to_pos_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/api/move-to-pos/*",
+    .method = HTTP_GET,
+    .handler = api_move_to_pos_handler,
+    .user_ctx = NULL};
 
 /* Wildcard file handler (registered last so that API endpoints take precedence) */
 static httpd_uri_t file_uri = {
-    .uri       = "/*",
-    .method    = HTTP_GET,
-    .handler   = file_get_handler,
-    .user_ctx  = NULL
-};
+    .uri = "/*",
+    .method = HTTP_GET,
+    .handler = file_get_handler,
+    .user_ctx = NULL};
 
 httpd_handle_t http_server_start(void)
 {
@@ -299,7 +321,8 @@ httpd_handle_t http_server_start(void)
 
     httpd_handle_t server = NULL;
     esp_err_t ret = httpd_start(&server, &config);
-    if (ret == ESP_OK) {
+    if (ret == ESP_OK)
+    {
         httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_send_command);
         httpd_register_uri_handler(server, &uri_api_enter_motor_mode);
@@ -309,7 +332,9 @@ httpd_handle_t http_server_start(void)
         httpd_register_uri_handler(server, &file_uri);
         ESP_LOGI(TAG, "HTTP server started successfully");
         return server;
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Error starting HTTP server!");
         return NULL;
     }

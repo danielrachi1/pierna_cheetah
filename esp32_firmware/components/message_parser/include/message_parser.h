@@ -6,18 +6,18 @@
 #include "cJSON.h" // Include cJSON library
 
 /* Define ranges for position, velocity, etc. */
-#define P_MIN -95.5f // Minimum position, radians
-#define P_MAX 95.5f // Maximum position, radians
-#define V_MIN -45.0f // Min velocity, rad/s
-#define V_MAX 45.0f // Max velocity, rad/s
-#define KP_MIN 0.0f // Min proportional gain, N-m/rad
+#define P_MIN -95.5f  // Minimum position, radians
+#define P_MAX 95.5f   // Maximum position, radians
+#define V_MIN -45.0f  // Min velocity, rad/s
+#define V_MAX 45.0f   // Max velocity, rad/s
+#define KP_MIN 0.0f   // Min proportional gain, N-m/rad
 #define KP_MAX 500.0f // Max proportional gain, N-m/rad
-#define KD_MIN 0.0f // Min derivatiive gain, N-m*s/rad
-#define KD_MAX 5.0f // Max derivative gain, N-m*s/rad
-#define I_MIN -18.0f // Min current, A
-#define I_MAX 18.0f // Max current, A
-#define T_MIN -18.0f // Minimum torque, N-m
-#define T_MAX 18.0f  // Maximum torque, N-m
+#define KD_MIN 0.0f   // Min derivatiive gain, N-m*s/rad
+#define KD_MAX 5.0f   // Max derivative gain, N-m*s/rad
+#define I_MIN -18.0f  // Min current, A
+#define I_MAX 18.0f   // Max current, A
+#define T_MIN -18.0f  // Minimum torque, N-m
+#define T_MAX 18.0f   // Maximum torque, N-m
 
 #define CAN_CMD_LENGTH 8   /**< Command message length in bytes */
 #define CAN_REPLY_LENGTH 5 /**< Reply message length in bytes */
