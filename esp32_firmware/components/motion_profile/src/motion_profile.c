@@ -16,9 +16,6 @@
 // 3. Deceleration phase with limited jerk down to end_vel.
 // For a full S-curve, jerk transitions (jerk ramp-ups and ramp-downs) are considered. Here we'll do a
 // simplified approach.
-//
-// NOTE: In a real system, you'd implement a more detailed s-curve planner. This code is a placeholder
-// providing a conceptual example and should be adapted for actual s-curve computations.
 
 bool motion_profile_generate_s_curve(float start_pos,
                                      float start_vel,

@@ -49,15 +49,15 @@ void app_main(void)
     ESP_ERROR_CHECK(can_bus_init());
     http_server_start();
 
-    // On boot, force all motors to exit motor mode (they start disengaged)
-    can_bus_send_exit_mode(0x1);
-    can_bus_send_exit_mode(0x2);
-    can_bus_send_exit_mode(0x3);
+    // On boot, force all motors to exit motor mode
+    twai_message_t response;
+    can_bus_send_exit_mode(0x1, &response);
+    can_bus_send_exit_mode(0x2, &response);
+    can_bus_send_exit_mode(0x3, &response);
 
     // Initialize motor control (per‑motor state) and launch its task
     motor_control_init();
     xTaskCreate(motor_control_task, "motor_control_task", 4096, NULL, 10, NULL);
 
-    // Create the CAN bus receive task (now encapsulated in the can_bus module)
-    xTaskCreate(can_bus_receive_task, "can_receive_task", CAN_TASK_STACK_SIZE, NULL, 10, NULL);
+    // The previous CAN receive task has been removed in favor of a request–response model.
 }

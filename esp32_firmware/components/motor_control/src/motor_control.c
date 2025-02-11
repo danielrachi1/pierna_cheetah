@@ -55,54 +55,44 @@ esp_err_t sync_and_engage_motor_control(int motor_id)
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Send a dummy command to request a sensor reading.
     uint8_t dummy_cmd[CAN_CMD_LENGTH] = {0};
     pack_cmd(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, dummy_cmd);
-    if (can_bus_transmit(dummy_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    twai_message_t response;
+    esp_err_t err = can_bus_request_response(dummy_cmd, CAN_CMD_LENGTH, motor_id, &response);
+    if (err != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send dummy command for synchronization", motor_id);
-        return ESP_FAIL;
+        return err;
     }
-    vTaskDelay(pdMS_TO_TICKS(100));
 
-    // Wait for sensor reply
-    twai_message_t sensor_msg;
-    bool sensor_received = false;
-    const int max_attempts = 5;
-    for (int i = 0; i < max_attempts; i++)
+    // Expect a sensor reply of 6 bytes.
+    if (response.data_length_code != 6)
     {
-        if (can_bus_receive(&sensor_msg) == ESP_OK &&
-            sensor_msg.data_length_code == 6 &&
-            sensor_msg.identifier == motor_id)
-        {
-            sensor_received = true;
-            break;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-    if (!sensor_received)
-    {
-        ESP_LOGE(LOG_TAG, "Motor ID %d: No sensor reply received during synchronization", motor_id);
+        ESP_LOGE(LOG_TAG, "Motor ID %d: Invalid sensor reply length: %d", motor_id, response.data_length_code);
         return ESP_FAIL;
     }
 
     motor_reply_t reply = {0};
-    unpack_reply(sensor_msg.data, &reply);
+    unpack_reply(response.data, &reply);
     ESP_LOGI(LOG_TAG, "Motor ID %d: Sensor reading: position=%.4f, velocity=%.4f, current=%.2f",
              motor_id, reply.position, reply.velocity, reply.current);
 
-    // Update the motor's current position
     state->current_position = reply.position;
 
+    // Send a hold command using the current sensor reading.
     uint8_t hold_cmd[CAN_CMD_LENGTH] = {0};
-    pack_cmd(reply.position, 0.0f, 10, 1, 0.0f, hold_cmd);
-    if (can_bus_transmit(hold_cmd, CAN_CMD_LENGTH, motor_id) != ESP_OK)
+    pack_cmd(reply.position, 0.0f, 0, 0, 0.0f, hold_cmd);
+    err = can_bus_request_response(hold_cmd, CAN_CMD_LENGTH, motor_id, &response);
+    if (err != ESP_OK)
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send hold command", motor_id);
-        return ESP_FAIL;
+        return err;
     }
-    vTaskDelay(pdMS_TO_TICKS(50));
 
-    if (can_bus_send_enter_mode(motor_id) == ESP_OK)
+    // Finally, send the Enter Motor Mode command.
+    err = can_bus_send_enter_mode(motor_id, &response);
+    if (err == ESP_OK)
     {
         ESP_LOGI(LOG_TAG, "Motor ID %d: Enter motor mode command sent successfully", motor_id);
         return ESP_OK;
@@ -110,7 +100,7 @@ esp_err_t sync_and_engage_motor_control(int motor_id)
     else
     {
         ESP_LOGE(LOG_TAG, "Motor ID %d: Failed to send enter motor mode command", motor_id);
-        return ESP_FAIL;
+        return err;
     }
 }
 
@@ -148,7 +138,8 @@ void motor_control_task(void *arg)
                 }
                 uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
                 pack_cmd(pt->position, pt->velocity, kp_current, kd_current, 0.0f, can_msg_data);
-                if (can_bus_transmit(can_msg_data, CAN_CMD_LENGTH, state->motor_id) == ESP_OK)
+                twai_message_t response;
+                if (can_bus_request_response(can_msg_data, CAN_CMD_LENGTH, state->motor_id, &response) == ESP_OK)
                 {
                     ESP_LOGI(LOG_TAG, "Motor %d: Trajectory point %d/%d | pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
                              state->motor_id, state->trajectory_index, state->trajectory_points,
@@ -170,10 +161,9 @@ void motor_control_task(void *arg)
 /**
  * @brief Processes an incoming motor command.
  *
- * For special commands ("ENTER_MODE", "EXIT_MODE", "ZERO_POS"), it calls the corresponding CAN commands.
- * For a move (position) command (when special_command is empty), it generates an S‑curve trajectory.
- *
- * Additionally, for motor 1 the target position is inverted here.
+ * For special commands ("ENTER_MODE", "EXIT_MODE", "ZERO_POS"), the corresponding
+ * CAN command is sent and its response processed. For a move (position) command, if
+ * the motor is engaged an S‑curve trajectory is generated.
  */
 esp_err_t motor_control_handle_command(const motor_command_t *command, const char *special_command)
 {
@@ -184,13 +174,15 @@ esp_err_t motor_control_handle_command(const motor_command_t *command, const cha
         return ESP_ERR_INVALID_ARG;
     }
 
+    twai_message_t response;
+    esp_err_t err;
     if (special_command && strlen(special_command) > 0)
     {
         if (strcmp(special_command, "ENTER_MODE") == 0)
         {
             if (!state->engaged)
             {
-                esp_err_t err = sync_and_engage_motor_control(state->motor_id);
+                err = sync_and_engage_motor_control(state->motor_id);
                 if (err == ESP_OK)
                 {
                     state->engaged = true;
@@ -213,7 +205,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command, const cha
         {
             if (state->engaged)
             {
-                esp_err_t err = can_bus_send_exit_mode(state->motor_id);
+                err = can_bus_send_exit_mode(state->motor_id, &response);
                 if (err == ESP_OK)
                 {
                     ESP_LOGI(LOG_TAG, "Exit Motor Mode command sent successfully for Motor %d", state->motor_id);
@@ -236,7 +228,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command, const cha
         {
             if (!state->engaged)
             {
-                esp_err_t err = can_bus_send_zero_pos_sensor(state->motor_id);
+                err = can_bus_send_zero_pos_sensor(state->motor_id, &response);
                 if (err == ESP_OK)
                 {
                     ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully for Motor %d", state->motor_id);
@@ -274,7 +266,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command, const cha
         {
             target_position = -target_position;
         }
-        // Check if this is a simple position-only command.
+        // Check if this is a position-only command.
         bool position_only = (command->velocity == 0.0f &&
                               command->kp == 0.0f &&
                               command->kd == 0.0f &&
