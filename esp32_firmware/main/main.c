@@ -58,6 +58,4 @@ void app_main(void)
     // Initialize motor control (per‑motor state) and launch its task
     motor_control_init();
     xTaskCreate(motor_control_task, "motor_control_task", 4096, NULL, 10, NULL);
-
-    // The previous CAN receive task has been removed in favor of a request–response model.
 }
