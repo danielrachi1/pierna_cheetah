@@ -141,9 +141,25 @@ void motor_control_task(void *arg)
                 twai_message_t response;
                 if (can_bus_request_response(can_msg_data, CAN_CMD_LENGTH, state->motor_id, &response) == ESP_OK)
                 {
-                    ESP_LOGI(LOG_TAG, "Motor %d: Trajectory point %d/%d | pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
-                             state->motor_id, state->trajectory_index, state->trajectory_points,
-                             pt->position, pt->velocity, kp_current, kd_current);
+                    // If the CAN reply includes sensor feedback (expected to be 6 bytes), update current_position.
+                    if (response.data_length_code == 6)
+                    {
+                        motor_reply_t reply = {0};
+                        unpack_reply(response.data, &reply);
+                        state->current_position = reply.position;
+                        ESP_LOGI(LOG_TAG, "Motor %d: Trajectory point %d/%d | Sensor reading: pos=%.3f, vel=%.3f, kp=%.3f, kd=%.3f",
+                                 state->motor_id, state->trajectory_index, state->trajectory_points,
+                                 reply.position, reply.velocity, kp_current, kd_current);
+                    }
+                    else
+                    {
+                        ESP_LOGI(LOG_TAG, "Motor %d: Trajectory point %d/%d sent (no sensor data)",
+                                 state->motor_id, state->trajectory_index, state->trajectory_points);
+                    }
+                }
+                else
+                {
+                    ESP_LOGE(LOG_TAG, "Motor %d: Failed to send trajectory point %d", state->motor_id, state->trajectory_index);
                 }
                 state->trajectory_index++;
                 if (state->trajectory_index >= state->trajectory_points)
