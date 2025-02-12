@@ -247,7 +247,9 @@ esp_err_t motor_control_handle_command(const motor_command_t *command, const cha
                 err = can_bus_send_zero_pos_sensor(state->motor_id, &response);
                 if (err == ESP_OK)
                 {
-                    ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully for Motor %d", state->motor_id);
+                    // Update sensor reading to zero since sensor zero was just set.
+                    state->current_position = 0.0f;
+                    ESP_LOGI(LOG_TAG, "Zero Position Sensor command sent successfully for Motor %d; sensor reading updated to 0.0", state->motor_id);
                     return ESP_OK;
                 }
                 else
