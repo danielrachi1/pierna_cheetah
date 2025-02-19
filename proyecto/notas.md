@@ -422,3 +422,37 @@ Hice un refactor completo del Firmware de la ESP32. El archivo main se estaba vo
 Realicé mejoras varias al Firware de la ESP32.
 
 Expuse la API que permitirá programar rutinas de movimiento.
+
+## 2025-02-10
+
+Segui iterando con el diseño del pulley case.
+
+## 2025-02-11
+
+Me di cuenta de que, gracias a cómo se comunica el motor, no es necesario mantener un loop leyendo mensajes del bus CAN en todo momento. Cambié la cómunicación del motor con la ESP32 a un modelo request-response.
+
+## 2025-02-12
+
+En el laboratorio, probé algunas cosas en las que estuve trabajando:
+
+Parece que el Pulley case tiene las medidas correctas ahora. El único detalle es que debo hacer un poco de fuerza para que entre el rodamiento a su lugar. Esto se debe a que el pulley case es un par de milimetros más largo de lo que debería. Por ahora no voy a modificarlo.
+
+Arreglé el cable de comunicación que se había dañado. Los conectores que pedí por Amazon eran los adecuados.
+
+El código de seguridad de que escribí para evitar movimientos súbitos no funcionó. La manera en la que los motores manejan su memoria no me permiten hacer el "reinicio de software" que esperaba hacer. Debido a la falta de documentación de los motores, no tengo cómo diseñar un mecanismo similar que me de la seguridad de que va a funcionar. Por lo tanto, debo hacer un mecanismo de hardware. La idea central es que necesito que los motores se apaguen por completo cuando la ESP32 se apague.
+
+## 2025-02-14
+
+Escogí y compré los relés que usaré para el mecanismo de seguridad (SSR-25DD). También pedí algunos elementos que me servirán para organizar el cableado y el montaje en general.
+
+## 2025-02-16
+
+Decidí no implementar una rutina home. El diseño de la estructura tiene varias limitantes que hace que implementar esto se vuelva muy complejo.
+
+## 2025-02-17
+
+Escribí el primer borrador de las guías de laboratorio. Aún no los agregaré a este repositorio, quiero pulirlos mejor antes publicarlos.
+
+## 2025-02-18
+
+Empecé a escribir el informe del trabajo de grado. Por ahora, tengo borradores de la sección de introducción y diagnostico.
