@@ -1,4 +1,0 @@
-int8 motor_id_out
-float32 position_out
-float32 velocity_out
-float32 torque_out
