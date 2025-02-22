@@ -132,7 +132,7 @@ Ahora que tengo un código que sé que funciona en la ESP con el transciever, me
 
 ## 2024-11-12
 
-Edité el código para que la ESP32 solo recibiera paquetes, pero no funcionó. Como el ejemplo de enviarse paquetes a sí misma sí funciona, es seguro asumir que este es un problema con el Arduino o el MCP2515.
+Edité el código para que la ESP32 solo recibiera paquetes, pero no funcionó. Como el ejemplo de enviarse paquetes a sí misma sí funciona, es seguro asumir que este es un problema con mi Arduino o el MCP2515.
 
 Ahora que entiendo cómo leer CAN frames desde la ESP32, procederé a entender qué datos puedo intercambiar con los motores. Para luego conectarlos a mi prototipo.
 
@@ -259,11 +259,11 @@ Desacoplé los eslabones 2 y 3. Esto me permitirá realizar pruebas más seguras
 
 Ahora que sé cómo enviar comandos a los motores, quiero implementar un mejor sistema para controlar el robot. Escribí esta especificación para referencia futura:
 
-Voy a desarrollar un sistema de control robótico utilizando el microcontrolador ESP32 para gestionar un robot de tres grados de libertad (3-DOF). El ESP32 es una opción adecuada debido a su bajo costo, eficiencia energética y capacidades integradas de Wi-Fi y Bluetooth.
+Voy a desarrollar un sistema de control robótico utilizando el microcontrolador ESP32 para gestionar un robot de tres grados de libertad (3-DOF).
 
 El sistema contará con una interfaz gráfica de usuario (GUI) basada en la web, alojada directamente en el ESP32. Esta elección permite a los usuarios supervisar y controlar el robot desde cualquier dispositivo con un navegador web, sin necesidad de hardware adicional. La GUI proporcionará una plataforma intuitiva para interactuar con el robot, facilitando su operación y monitoreo. Esto estará inspirado en Mainsail.
 
-Además, integraré un controlador físico conectado al ESP32 mediante Bluetooth. Esta configuración permite el control manual directo del robot, proporcionando una alternativa al control basado en la web. El ESP32 procesará las entradas tanto de la GUI como del controlador físico, traduciéndolas en comandos precisos para los motores que controlan los movimientos del robot. Esta doble interfaz ofrece flexibilidad, permitiendo al usuario elegir entre el control remoto a través de la interfaz web o el control directo mediante el controlador físico, según las necesidades específicas de cada situación.
+Además, si el tiempo y recurso lo permiten, integraré un controlador físico conectado al ESP32 mediante Bluetooth. Esta configuración permite el control manual directo del robot, proporcionando una alternativa al control basado en la web. El ESP32 procesará las entradas tanto de la GUI como del controlador físico, traduciéndolas en comandos precisos para los motores que controlan los movimientos del robot. Esta doble interfaz ofrece flexibilidad, permitiendo al usuario elegir entre el control remoto a través de la interfaz web o el control directo mediante el controlador físico, según las necesidades específicas de cada situación.
 
 Escribí una buena parte del firmware para hacer esto. En este momento se pueden enviar comandos desde una página web, hacer el parsing, y enviarlos al motor via CAN.
 
