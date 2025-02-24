@@ -1,6 +1,4 @@
 #include "can_bus.h"
-#include "motor_control.h"
-#include "message_parser.h"
 #include "esp_log.h"
 #include <string.h>
 #include "driver/twai.h"
@@ -79,7 +77,7 @@ esp_err_t can_bus_request_response(uint8_t *msg_data, size_t length, int motor_i
     memcpy(message.data, msg_data, length);
 
     ESP_LOGI(LOG_TAG, "Sending CAN Message to Motor ID %d", motor_id);
-    ESP_LOG_BUFFER_HEX(LOG_TAG, message.data, message.data_length_code);
+    ESP_LOG_BUFFER_HEX_LEVEL(LOG_TAG, message.data, message.data_length_code, ESP_LOG_DEBUG);
 
     err = twai_transmit(&message, pdMS_TO_TICKS(1000));
     if (err != ESP_OK)
@@ -92,8 +90,8 @@ esp_err_t can_bus_request_response(uint8_t *msg_data, size_t length, int motor_i
     err = twai_receive(response, pdMS_TO_TICKS(1000));
     if (err == ESP_OK)
     {
-        ESP_LOGI(LOG_TAG, "Received CAN Message: ID: 0x%lx, DLC: %d", response->identifier, response->data_length_code);
-        ESP_LOG_BUFFER_HEX(LOG_TAG, response->data, response->data_length_code);
+        ESP_LOGI(LOG_TAG, "Received CAN Message from Motor ID %lx", response->identifier);
+        ESP_LOG_BUFFER_HEX_LEVEL(LOG_TAG, response->data, response->data_length_code, ESP_LOG_DEBUG);
     }
     else
     {

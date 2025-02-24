@@ -1,87 +1,74 @@
-/**
- * Converts degrees to radians.
- * @param {number} degrees 
- * @returns {number} radians
- */
-function degreesToRadians(degrees) {
-    return degrees * (Math.PI / 180);
-}
-
-/**
- * Displays a notification message.
- * @param {string} message - The message to display.
- * @param {string} type - The type of message: 'success' or 'error'.
- */
 function showNotification(message, type) {
     var notification = document.getElementById('notification');
     notification.textContent = message;
-    notification.className = ''; // Reset classes
+    notification.className = '';
     notification.classList.add(type === 'error' ? 'error' : 'success', 'show');
 
-    // Automatically hide the notification after 3 seconds
     setTimeout(function () {
         notification.classList.remove('show');
         notification.classList.add('hidden');
     }, 3000);
 }
 
-function sendPositionOnlyCommand() {
-    var motor_id = parseInt(document.getElementById('motor_id_position').value);
-    var position_deg = parseFloat(document.getElementById('position_only').value);
+/**
+ * Sends a JSON command to /api/command
+ * @param {number} motorId 
+ * @param {string} commandName 
+ * @param {number} positionDeg 
+ */
+function sendJsonCommand(motorId, commandName, positionDeg) {
+    let payload = {
+        motor_id: motorId,
+        command: commandName
+    };
 
-    // Validate position within 0° to 360°
-    if (position_deg < 0 || position_deg > 360) {
-        showNotification('Position must be between 0° and 360°.', 'error');
-        return;
+    if (commandName === 'go_to_position') {
+        let angle = parseFloat(positionDeg);
+        if (isNaN(angle) || angle < 0 || angle > 360) {
+            showNotification("Position must be 0-360 degrees.", 'error');
+            return;
+        }
+        payload.position = angle;
     }
 
-    var position_rad = degreesToRadians(position_deg);
-
-    var command = {
-        "motor_id": motor_id,
-        "position": position_rad
-    };
-
-    fetch('/send_command', {
+    fetch('/api/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(command)
+        body: JSON.stringify(payload)
     })
-    .then(response => {
-        if (!response.ok) {
-            return response.text().then(text => { throw new Error(text) });
-        }
-        return response.text();
-    })
-    .then(data => showNotification(data, 'success'))
-    .catch(error => {
-        console.error('Error:', error);
-        showNotification('Failed to send command: ' + error.message, 'error');
-    });
+        .then(res => res.text().then(txt => ({ status: res.status, text: txt })))
+        .then(({ status, text }) => {
+            if (status >= 200 && status < 300) {
+                let jsonResp;
+                try {
+                    jsonResp = JSON.parse(text);
+                } catch (e) {
+                    showNotification("Malformed JSON response", 'error');
+                    return;
+                }
+
+                if (jsonResp.status === 'ok') {
+                    showNotification(jsonResp.message, 'success');
+                } else {
+                    showNotification(jsonResp.message, 'error');
+                }
+            } else {
+                showNotification("HTTP " + status + ": " + text, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification("Fetch error: " + err.message, 'error');
+        });
 }
 
-function sendSpecialCommand(commandName) {
-    var motor_id = parseInt(document.getElementById('motor_id_special').value);
+function sendSpecialCommand(cmdName) {
+    let motorId = parseInt(document.getElementById('motor_id_special').value);
+    sendJsonCommand(motorId, cmdName, null);
+}
 
-    var command = {
-        "motor_id": motor_id,
-        "command": commandName
-    };
-
-    fetch('/send_command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(command)
-    })
-        .then(response => {
-            if (!response.ok) {
-                return response.text().then(text => { throw new Error(text) });
-            }
-            return response.text();
-        })
-        .then(data => showNotification(data, 'success'))
-        .catch(error => {
-            console.error('Error:', error);
-            showNotification('Failed to send command: ' + error.message, 'error');
-        });
+function sendPositionOnlyCommand() {
+    let motorId = parseInt(document.getElementById('motor_id_position').value);
+    let deg = parseFloat(document.getElementById('position_only').value);
+    sendJsonCommand(motorId, 'go_to_position', deg);
 }

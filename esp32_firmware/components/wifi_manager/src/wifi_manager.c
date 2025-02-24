@@ -4,7 +4,7 @@
 #include "esp_netif.h"
 #include "esp_log.h"
 #include "freertos/event_groups.h"
-#include "mdns.h" // Include mDNS
+#include "mdns.h"
 
 static const char *TAG = "WIFI_MANAGER";
 
@@ -20,7 +20,6 @@ static const char *TAG = "WIFI_MANAGER";
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
-/* The event handler for Wi‑Fi events */
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
@@ -78,7 +77,7 @@ esp_err_t wifi_manager_start(void)
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Wi‑Fi initialization completed.");
+    ESP_LOGI(TAG, "Wifi initialization completed.");
 
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
                                            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,

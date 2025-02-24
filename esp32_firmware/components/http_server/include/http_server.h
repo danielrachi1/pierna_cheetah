@@ -3,23 +3,16 @@
 
 #include "esp_http_server.h"
 
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-
-    /**
-     * @brief Starts the HTTP server.
-     *
-     * This function creates and starts the HTTP server, registers URI handlers for the
-     * root (serving index.html), a POST endpoint for commands, and a wildcard handler for files.
-     *
-     * @return httpd_handle_t The handle to the HTTP server, or NULL on error.
-     */
-    httpd_handle_t http_server_start(void);
-
-#ifdef __cplusplus
-}
-#endif
+/**
+ * @brief Starts the HTTP server.
+ *
+ * This function creates and starts the HTTP server, registers URI handlers for:
+ * - Root (serving index.html)
+ * - POST /api/command (for all motor commands as JSON)
+ * - Wildcard file handler (for static files in SPIFFS)
+ *
+ * @return httpd_handle_t The handle to the HTTP server, or NULL on error.
+ */
+httpd_handle_t http_server_start(void);
 
 #endif // HTTP_SERVER_H

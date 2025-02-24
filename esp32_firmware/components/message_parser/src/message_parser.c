@@ -2,19 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include "esp_log.h"
-#include "cJSON.h" // Include cJSON library
+#include "cJSON.h"
 
-#define LOG_TAG "MESSAGE_PARSER" // If I define it in message_parser.h a warning is raised
+#define LOG_TAG "MESSAGE_PARSER"
 
-/**
- * @brief Maps a float x in [x_min,x_max] to an unsigned int in [0,2^bits - 1].
- *
- * @param x      The float value to be converted.
- * @param x_min  Minimum value of x.
- * @param x_max  Maximum value of x.
- * @param bits   Number of bits of the unsigned int.
- * @return uint16_t The mapped unsigned integer.
- */
 uint16_t float_to_uint(float x, float x_min, float x_max, uint8_t bits)
 {
     float span = x_max - x_min;
@@ -24,15 +15,6 @@ uint16_t float_to_uint(float x, float x_min, float x_max, uint8_t bits)
     return result;
 }
 
-/**#define LOG_TAG "MOTOR_CONTROLLER"
- * @brief Maps an unsigned int x_int in [0,2^bits -1] to a float in [x_min,x_max].
- *
- * @param x_int  The unsigned int value to be converted.
- * @param x_min  Minimum value of x.
- * @param x_max  Maximum value of x.
- * @param bits   Number of bits of the unsigned int.
- * @return float The mapped float value.
- */
 float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits)
 {
     float span = x_max - x_min;
@@ -43,7 +25,7 @@ float uint_to_float(uint16_t x_int, float x_min, float x_max, uint8_t bits)
 
 void pack_cmd(float position, float velocity, float kp, float kd, float feed_forward_torque, uint8_t *msg_data)
 {
-    // Limit data to be within bounds
+    // Clamp to valid ranges
     if (position < P_MIN)
         position = P_MIN;
     if (position > P_MAX)
@@ -65,14 +47,12 @@ void pack_cmd(float position, float velocity, float kp, float kd, float feed_for
     if (feed_forward_torque > T_MAX)
         feed_forward_torque = T_MAX;
 
-    // Convert floats to unsigned ints
     uint16_t p_int = float_to_uint(position, P_MIN, P_MAX, 16);
     uint16_t v_int = float_to_uint(velocity, V_MIN, V_MAX, 12);
     uint16_t kp_int = float_to_uint(kp, KP_MIN, KP_MAX, 12);
     uint16_t kd_int = float_to_uint(kd, KD_MIN, KD_MAX, 12);
     uint16_t t_int = float_to_uint(feed_forward_torque, T_MIN, T_MAX, 12);
 
-    // Pack data into bytes
     msg_data[0] = (p_int >> 8) & 0xFF;
     msg_data[1] = p_int & 0xFF;
     msg_data[2] = (v_int >> 4) & 0xFF;
@@ -85,93 +65,13 @@ void pack_cmd(float position, float velocity, float kp, float kd, float feed_for
 
 void unpack_reply(uint8_t *msg_data, motor_reply_t *reply)
 {
-    // Extract Motor ID if needed
     reply->motor_id = msg_data[0];
 
-    // Extract position (16 bits from bytes 1 and 2)
     uint16_t p_int = ((uint16_t)msg_data[1] << 8) | msg_data[2];
-
-    // Extract velocity (12 bits: upper 8 bits from byte 3 and upper 4 bits from byte 4)
     uint16_t v_int = ((uint16_t)msg_data[3] << 4) | (msg_data[4] >> 4);
-
-    // Extract current (12 bits: lower 4 bits from byte 4 and all 8 bits from byte 5)
     uint16_t i_int = (((uint16_t)(msg_data[4] & 0x0F)) << 8) | msg_data[5];
 
-    // Convert raw values to scaled floats
     reply->position = uint_to_float(p_int, P_MIN, P_MAX, 16);
     reply->velocity = uint_to_float(v_int, V_MIN, V_MAX, 12);
     reply->current = uint_to_float(i_int, I_MIN, I_MAX, 12);
-}
-
-bool parse_json_command(const char *json_string, motor_command_t *command_struct, char *special_command)
-{
-    cJSON *json = cJSON_Parse(json_string);
-    if (json == NULL)
-    {
-        ESP_LOGE(LOG_TAG, "Failed to parse JSON");
-        special_command[0] = '\0'; // Ensure special_command is empty
-        return false;
-    }
-
-    // Initialize special_command to an empty string
-    special_command[0] = '\0'; // No special command by default
-
-    // Parse motor_id
-    cJSON *motor_id_item = cJSON_GetObjectItem(json, "motor_id");
-    if (cJSON_IsNumber(motor_id_item))
-    {
-        command_struct->motor_id = motor_id_item->valueint;
-    }
-    // If motor_id is missing, it remains at its initialized value (e.g., 0)
-
-    // Parse special_command
-    cJSON *command_item = cJSON_GetObjectItem(json, "command");
-    if (cJSON_IsString(command_item) && (command_item->valuestring != NULL))
-    {
-        strncpy(special_command, command_item->valuestring, BUF_SIZE - 1);
-        special_command[BUF_SIZE - 1] = '\0';
-    }
-
-    // Parse position
-    cJSON *position_item = cJSON_GetObjectItem(json, "position");
-    if (cJSON_IsNumber(position_item))
-    {
-        command_struct->position = (float)position_item->valuedouble;
-    }
-    // If position is missing, it remains at its initialized value (e.g., 0.0f)
-
-    // Parse velocity
-    cJSON *velocity_item = cJSON_GetObjectItem(json, "velocity");
-    if (cJSON_IsNumber(velocity_item))
-    {
-        command_struct->velocity = (float)velocity_item->valuedouble;
-    }
-    // If velocity is missing, it remains at its initialized value (e.g., 0.0f)
-
-    // Parse kp
-    cJSON *kp_item = cJSON_GetObjectItem(json, "kp");
-    if (cJSON_IsNumber(kp_item))
-    {
-        command_struct->kp = (float)kp_item->valuedouble;
-    }
-    // If kp is missing, it remains at its initialized value (e.g., 0.0f)
-
-    // Parse kd
-    cJSON *kd_item = cJSON_GetObjectItem(json, "kd");
-    if (cJSON_IsNumber(kd_item))
-    {
-        command_struct->kd = (float)kd_item->valuedouble;
-    }
-    // If kd is missing, it remains at its initialized value (e.g., 0.0f)
-
-    // Parse feed_forward_torque
-    cJSON *t_ff_item = cJSON_GetObjectItem(json, "feed_forward_torque");
-    if (cJSON_IsNumber(t_ff_item))
-    {
-        command_struct->feed_forward_torque = (float)t_ff_item->valuedouble;
-    }
-    // If feed_forward_torque is missing, it remains at its initialized value (e.g., 0.0f)
-
-    cJSON_Delete(json);
-    return true;
 }
