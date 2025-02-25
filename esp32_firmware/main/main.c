@@ -8,6 +8,7 @@
 #include "can_bus.h"
 #include "http_server.h"
 #include "motor_control.h"
+#include "driver/gpio.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 #define TASK_STACK_SIZE 4096
@@ -50,4 +51,9 @@ void app_main(void)
 
     // 6. Start HTTP server (to serve the UI from SPIFFS and expose the API)
     http_server_start();
+
+    // Set GPIO pin 4 to output and drive it high (3.3V). This enables the relay.
+    gpio_reset_pin(GPIO_NUM_4);
+    gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
+    gpio_set_level(GPIO_NUM_4, 1);
 }

@@ -13,12 +13,12 @@
 #define CAN_CMD_LENGTH 8
 
 // Example gains for each motor (not strictly used in this simplified approach)
-#define KP1 0
-#define KD1 0
-#define KP2 0
-#define KD2 0
-#define KP3 0
-#define KD3 0
+#define KP1 10
+#define KD1 0.1
+#define KP2 10
+#define KD2 0.1
+#define KP3 10
+#define KD3 0.1
 
 static motor_state_t motor_states[NUM_MOTORS];
 
