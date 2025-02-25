@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #define LOG_TAG "MOTOR_CONTROL"
 #define CAN_CMD_LENGTH 8
@@ -101,7 +102,7 @@ esp_err_t motor_control_sync_position(int motor_id)
 /**
  * @brief Helper for handling a "move" command (MOTOR_CMD_MOVE).
  *
- * Generates a new S-curve trajectory if the motor is engaged and not busy.
+ * Generates a new S‑curve trajectory if the motor is engaged and not busy.
  */
 static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad)
 {
@@ -115,8 +116,7 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     // If there's already an active trajectory, reject
     if (state->trajectory_active)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d is currently on a trajectory; rejecting new move command.",
-                 state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d is currently on a trajectory; rejecting new move command.", state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -128,8 +128,39 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         return err;
     }
 
-    // invert for motor 1, the physical motor direction is inverted for some reason.
-    float final_position = (state->motor_id == 1) ? -target_position_rad : target_position_rad;
+    // Convert target position from radians to degrees for validation.
+    float target_deg = target_position_rad * (180.0f / M_PI);
+    float final_position_rad;
+    switch (state->motor_id)
+    {
+    case 1:
+        if (target_deg < MOTOR1_MIN_ANGLE_DEG || target_deg > MOTOR1_MAX_ANGLE_DEG)
+        {
+            ESP_LOGE(LOG_TAG, "Motor 1: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR1_MIN_ANGLE_DEG, MOTOR1_MAX_ANGLE_DEG);
+            return ESP_ERR_INVALID_ARG;
+        }
+        final_position_rad = -target_position_rad; // invert for motor 1
+        break;
+    case 2:
+        if (target_deg < MOTOR2_MIN_ANGLE_DEG || target_deg > MOTOR2_MAX_ANGLE_DEG)
+        {
+            ESP_LOGE(LOG_TAG, "Motor 2: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR2_MIN_ANGLE_DEG, MOTOR2_MAX_ANGLE_DEG);
+            return ESP_ERR_INVALID_ARG;
+        }
+        final_position_rad = target_position_rad;
+        break;
+    case 3:
+        if (target_deg < MOTOR3_MIN_ANGLE_DEG || target_deg > MOTOR3_MAX_ANGLE_DEG)
+        {
+            ESP_LOGE(LOG_TAG, "Motor 3: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR3_MIN_ANGLE_DEG, MOTOR3_MAX_ANGLE_DEG);
+            return ESP_ERR_INVALID_ARG;
+        }
+        final_position_rad = target_position_rad;
+        break;
+    default:
+        ESP_LOGE(LOG_TAG, "Invalid motor id %d", state->motor_id);
+        return ESP_ERR_INVALID_ARG;
+    }
 
     // Clear any old trajectory
     if (state->trajectory)
@@ -141,13 +172,13 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         state->trajectory_active = false;
     }
 
-    ESP_LOGI(LOG_TAG, "Motor %d: Generating S-curve from %.4f to %.4f (rad)",
-             state->motor_id, state->current_position, final_position);
+    ESP_LOGI(LOG_TAG, "Motor %d: Generating S‑curve from %.4f to %.4f (rad)",
+             state->motor_id, state->current_position, final_position_rad);
 
     bool success = motion_profile_generate_s_curve(
         state->current_position,
         0.0f, // start velocity
-        final_position,
+        final_position_rad,
         0.0f, // end velocity
         MP_DEFAULT_MAX_VEL,
         MP_DEFAULT_MAX_ACC,
@@ -157,13 +188,13 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         &state->trajectory_points);
     if (!success)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate S-curve.", state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate S‑curve.", state->motor_id);
         return ESP_FAIL;
     }
 
     state->trajectory_active = true;
     state->trajectory_index = 0;
-    ESP_LOGI(LOG_TAG, "Motor %d: S-curve created with %d points.",
+    ESP_LOGI(LOG_TAG, "Motor %d: S‑curve created with %d points.",
              state->motor_id, state->trajectory_points);
 
     return ESP_OK;

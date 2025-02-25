@@ -178,11 +178,34 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
             return ESP_FAIL;
         }
         float deg = (float)pos_item->valuedouble;
-        // will probably change this later, not all motors have the same limits
-        if (deg < 0.0f || deg > 360.0f)
+
+        float min_deg, max_deg;
+        switch (motor_id)
+        {
+        case 1:
+            min_deg = MOTOR1_MIN_ANGLE_DEG;
+            max_deg = MOTOR1_MAX_ANGLE_DEG;
+            break;
+        case 2:
+            min_deg = MOTOR2_MIN_ANGLE_DEG;
+            max_deg = MOTOR2_MAX_ANGLE_DEG;
+            break;
+        case 3:
+            min_deg = MOTOR3_MIN_ANGLE_DEG;
+            max_deg = MOTOR3_MAX_ANGLE_DEG;
+            break;
+        default:
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid motor_id\"}");
+            return ESP_FAIL;
+        }
+
+        if (deg < min_deg || deg > max_deg)
         {
             cJSON_Delete(root);
-            httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Position must be between 0 and 360 deg\"}");
+            char message[128];
+            snprintf(message, sizeof(message), "{\"status\":\"error\",\"message\":\"Position must be between %.1f and %.1f deg for motor %d\"}", min_deg, max_deg, motor_id);
+            httpd_resp_sendstr(req, message);
             return ESP_FAIL;
         }
         // convert to radians
