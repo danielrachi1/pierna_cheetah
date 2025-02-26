@@ -137,7 +137,7 @@ static esp_err_t api_robot_off_handler(httpd_req_t *req)
  * POST /api/command
  * JSON body: {
  *   "motor_id": 1|2|3,
- *   "speed": 0..100,
+ *   "speed": 1..100,
  *   "command": "go_to_position",
  *   "position": <degrees>
  * }
@@ -218,7 +218,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     }
     float deg = (float)pos_item->valuedouble;
 
-    // Retrieve "speed" (0..100)
+    // Retrieve "speed" (1..100)
     cJSON *speed_item = cJSON_GetObjectItem(root, "speed");
     if (!cJSON_IsNumber(speed_item))
     {
@@ -227,25 +227,27 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
     float speed_percentage = (float)speed_item->valuedouble;
-    if (speed_percentage < 0.0f)
-        speed_percentage = 0.0f;
+
+    // Clamp to [1..100] so 0% is not allowed anymore
+    if (speed_percentage < 1.0f)
+        speed_percentage = 1.0f;
     if (speed_percentage > 100.0f)
         speed_percentage = 100.0f;
 
-    // Build command and pass to motor_control
+    cJSON_Delete(root);
+
+    // Build command
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
         .position = deg * (M_PI / 180.0f), // convert to radians
         .speed_percentage = speed_percentage};
 
-    cJSON_Delete(root);
-
     esp_err_t err = motor_control_handle_command(&cmd);
-    httpd_resp_set_type(req, "application/json");
 
     if (err == ESP_OK)
     {
+        // If a move command is accepted, we can set state to OPERATING
         robot_controller_set_state(ROBOT_STATE_OPERATING);
         httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Move command accepted\"}");
     }
