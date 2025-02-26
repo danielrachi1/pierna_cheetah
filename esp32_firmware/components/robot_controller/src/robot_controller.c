@@ -110,6 +110,7 @@ esp_err_t robot_controller_turn_on(void)
     {
         return ESP_FAIL;
     }
+
     if (s_robot_state != ROBOT_STATE_OFF && s_robot_state != ROBOT_STATE_INITIALIZING)
     {
         ESP_LOGW(TAG, "Turn on called in state %d, ignoring.", s_robot_state);
@@ -135,11 +136,15 @@ esp_err_t robot_controller_turn_on(void)
         }
     }
 
-    // 3) Enter motor mode on all motors
+    // 3) Enter motor mode on all motors via motor_control
     for (int i = 1; i <= NUM_MOTORS; i++)
     {
-        twai_message_t response;
-        esp_err_t err = can_bus_send_enter_mode(i, &response);
+        motor_command_t cmd = {
+            .motor_id = i,
+            .cmd_type = MOTOR_CMD_ENTER_MODE,
+            .position = 0.0f // Not used for enter mode
+        };
+        esp_err_t err = motor_control_handle_command(&cmd);
         if (err != ESP_OK)
         {
             ESP_LOGE(TAG, "Enter mode failed on motor %d: %s", i, esp_err_to_name(err));
@@ -148,7 +153,7 @@ esp_err_t robot_controller_turn_on(void)
         }
     }
 
-    // 4) Set motors_engaged flag in NVS
+    // 4) Update motors_engaged in NVS
     esp_err_t err = set_motors_engaged_flag(true);
     if (err != ESP_OK)
     {
@@ -170,13 +175,21 @@ esp_err_t robot_controller_turn_off(void)
     {
         return ESP_FAIL;
     }
+
+    // If already OFF or shutting down, skip
     if (s_robot_state == ROBOT_STATE_OFF || s_robot_state == ROBOT_STATE_SHUTTING_DOWN)
     {
         ESP_LOGW(TAG, "Already OFF or shutting down, ignoring.");
         xSemaphoreGive(s_state_mutex);
         return ESP_OK;
     }
-    s_robot_state = ROBOT_STATE_SHUTTING_DOWN;
+
+    // Instead of setting SHUTTING_DOWN here, we stay in an active state
+    // so motor_control_move_blocking() won't bail out.
+    // We can remain in ENGAGED_READY or OPERATING (depending on real usage).
+    // For simplicity, if it was ENGAGED_READY or OPERATING, we just let it stay as is:
+    // s_robot_state = ROBOT_STATE_ENGAGED_READY; (not strictly necessary)
+
     xSemaphoreGive(s_state_mutex);
 
     // 1) Move all motors to home (0.0)
@@ -186,8 +199,13 @@ esp_err_t robot_controller_turn_off(void)
         if (err != ESP_OK)
         {
             ESP_LOGW(TAG, "Motor %d failed to reach home (or timed out). Forcing shutdown anyway.", i);
+            robot_controller_forced_shutdown();
+            return ESP_FAIL;
         }
     }
+
+    // Now that we've successfully moved them, set to SHUTTING_DOWN
+    robot_controller_set_state(ROBOT_STATE_SHUTTING_DOWN);
 
     // 2) Exit motor mode on all motors
     for (int i = 1; i <= NUM_MOTORS; i++)
@@ -206,7 +224,7 @@ esp_err_t robot_controller_turn_off(void)
     // 4) Clear motors_engaged flag in NVS
     (void)set_motors_engaged_flag(false);
 
-    // 5) Set state to OFF
+    // 5) Finally set state to OFF
     robot_controller_set_state(ROBOT_STATE_OFF);
     ESP_LOGI(TAG, "Robot is now OFF.");
     return ESP_OK;

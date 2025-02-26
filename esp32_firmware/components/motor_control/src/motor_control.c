@@ -329,8 +329,11 @@ void motor_control_task(void *arg)
     while (1)
     {
         robot_state_t rstate = robot_controller_get_state();
-        // If shutting down or in error, we do not run normal trajectories
-        if (rstate == ROBOT_STATE_SHUTTING_DOWN || rstate == ROBOT_STATE_ERROR)
+
+        // Skip sending setpoints if we're OFF, SHUTTING_DOWN, or in ERROR
+        if (rstate == ROBOT_STATE_SHUTTING_DOWN ||
+            rstate == ROBOT_STATE_ERROR ||
+            rstate == ROBOT_STATE_OFF)
         {
             vTaskDelay(delay_ticks);
             continue;
@@ -458,12 +461,13 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
     TickType_t start = xTaskGetTickCount();
     while (1)
     {
-        // If in error or shutting down, break
+        // If in error or shutting down (or turned off), stop
         robot_state_t rstate = robot_controller_get_state();
-        if (rstate == ROBOT_STATE_ERROR || rstate == ROBOT_STATE_SHUTTING_DOWN)
+        if (rstate == ROBOT_STATE_ERROR || rstate == ROBOT_STATE_SHUTTING_DOWN || rstate == ROBOT_STATE_OFF)
         {
             return ESP_ERR_INVALID_STATE;
         }
+
         // Check trajectory
         if (!state->trajectory_active)
         {

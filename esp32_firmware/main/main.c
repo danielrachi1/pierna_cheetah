@@ -17,7 +17,7 @@
 
 void app_main(void)
 {
-    // 1. Initialize NVS
+    // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -26,7 +26,7 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // 2. Mount SPIFFS for file serving
+    // Mount SPIFFS for file serving
     esp_vfs_spiffs_conf_t spiffs_conf = {
         .base_path = "/spiffs",
         .partition_label = NULL,
@@ -40,15 +40,15 @@ void app_main(void)
     }
     ESP_LOGI(LOG_TAG, "SPIFFS mounted successfully");
 
-    // 3. Initialize CAN bus
+    // Initialize robot controller
+    robot_controller_init();
+
+    // Initialize CAN bus
     ESP_ERROR_CHECK(can_bus_init());
 
-    // 4. Initialize motor control
+    // Initialize motor control
     motor_control_init();
     xTaskCreate(motor_control_task, "motor_control_task", TASK_STACK_SIZE, NULL, 10, NULL);
-
-    // 5. Initialize robot controller
-    robot_controller_init();
 
     // Check if motors were engaged from previous run using the helper function
     if (robot_controller_get_motors_engaged_flag())
@@ -61,11 +61,11 @@ void app_main(void)
         robot_controller_set_state(ROBOT_STATE_OFF);
     }
 
-    // 6. Start Wi-Fi and mDNS
+    // Start Wi-Fi and mDNS
     ESP_ERROR_CHECK(wifi_manager_start());
     ESP_ERROR_CHECK(wifi_manager_setup_mdns());
 
-    // 7. Start HTTP server
+    // Start HTTP server
     http_server_start();
 
     // 8. Configure relay GPIO as OUTPUT but ensure it's off initially
