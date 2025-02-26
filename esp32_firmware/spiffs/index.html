@@ -3,53 +3,44 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>ESP32 Motor Controller</title>
+    <title>ESP32 Robot Controller</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <script src="script.js" defer></script>
 </head>
 
 <body>
-    <h1>ESP32 Motor Controller</h1>
-
+    <h1>ESP32 Robot Controller</h1>
     <div id="notification" class="hidden"></div>
 
-    <!-- Special Commands Section -->
-    <section class="command-section">
-        <h2>Special Commands</h2>
-        <div class="form-group">
-            <label for="motor_id_special" class="field-label">Motor ID</label>
-            <select id="motor_id_special" name="motor_id_special" required>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-            </select>
+    <!-- OFF VIEW -->
+    <section id="robot-off">
+        <h2>Robot is Off</h2>
+        <p>Please manually place the motors at the home position (0°). Then press Turn On.</p>
+        <div class="image-container">
+            <img src="home_position.png" alt="Home Position Diagram" class="center-image">
         </div>
-
-        <div class="button-group">
-            <button class="btn" onclick="sendSpecialCommand('enter_motor_mode')">Enter Motor Mode</button>
-            <button class="btn" onclick="sendSpecialCommand('exit_motor_mode')">Exit Motor Mode</button>
-            <button class="btn" onclick="sendSpecialCommand('zero_position_sensor')">Zero Position Sensor</button>
-        </div>
+        <button class="btn" onclick="turnRobotOn()">Turn On</button>
     </section>
 
-    <!-- Move to Position -->
-    <section class="command-section">
-        <h2>Move to Position</h2>
-        <p>Enter an angle in degrees (0-360) to move the motor with an S-curve trajectory.</p>
-        <div class="form-group">
-            <label for="motor_id_position" class="field-label">Motor ID</label>
-            <select id="motor_id_position" name="motor_id_position" required>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
+    <!-- ON VIEW -->
+    <section id="robot-on" class="hidden">
+        <h2>Robot is On</h2>
+        <div>
+            <label for="motor_id">Motor ID</label>
+            <select id="motor_id">
+                <option value="1">Motor 1</option>
+                <option value="2">Motor 2</option>
+                <option value="3">Motor 3</option>
             </select>
         </div>
-        <div class="form-group">
-            <label for="position_only" class="field-label">Position (degrees)</label>
-            <input type="number" id="position_only" min="0" max="360" step="0.1" value="0" required>
+        <div>
+            <label for="position_deg">Angle (degrees)</label>
+            <input type="number" id="position_deg" min="-180" max="360" step="0.1" value="0">
         </div>
-        <button class="btn" onclick="sendPositionOnlyCommand()">Go!</button>
+        <button class="btn" onclick="sendPositionCommand()">Send Position</button>
+        <hr>
+        <button class="btn" onclick="turnRobotOff()">Turn Off</button>
     </section>
 </body>
 

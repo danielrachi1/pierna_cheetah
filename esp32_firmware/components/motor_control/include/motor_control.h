@@ -63,15 +63,13 @@ motor_state_t *motor_control_get_state(int motor_id);
 
 /**
  * @brief Task that sends trajectory setpoints to each motor until the trajectory is done.
+ *        Also includes watchdog logic for CAN timeouts.
  * @param arg Unused
  */
 void motor_control_task(void *arg);
 
 /**
  * @brief Syncs the current motor position from the motor sensor.
- *
- * If engaged, uses ENTER_MODE message; if disengaged, uses EXIT_MODE message
- * to trigger a sensor read.
  *
  * @param motor_id The motor ID to sync
  * @return ESP_OK on success, or an error code
@@ -86,6 +84,17 @@ esp_err_t motor_control_sync_position(int motor_id);
  */
 esp_err_t motor_control_handle_command(const motor_command_t *command);
 
+/**
+ * @brief A blocking helper function that moves the motor to the specified radian position
+ *        and waits until the trajectory completes or a timeout occurs.
+ *
+ * @param motor_id Motor ID (1-based)
+ * @param target_position_rad Target angle in radians
+ * @param timeout_ticks How long to wait before giving up
+ * @return ESP_OK if the move completes, ESP_ERR_TIMEOUT if it times out, or an error if something else fails
+ */
+esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, int timeout_ticks);
+
 /* Gain definitions */
 #define KP1 10
 #define KD1 0.1
@@ -94,9 +103,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command);
 #define KP3 10
 #define KD3 0.1
 
-/* Motion limits for each motor (in degrees)
- * Modify these macros to change the allowed range for each motor.
- */
+/* Motion limits for each motor (in degrees) */
 #define MOTOR1_MIN_ANGLE_DEG 0.0f
 #define MOTOR1_MAX_ANGLE_DEG 180.0f
 #define MOTOR2_MIN_ANGLE_DEG -180.0f

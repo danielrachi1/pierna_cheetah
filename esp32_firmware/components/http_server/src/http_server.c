@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "motor_control.h" // for motor_command_t, motor_command_type_t, etc.
+#include "motor_control.h"
+#include "robot_controller.h"
 
 #define TAG "HTTP_SERVER"
 #define FILEPATH_MAX 520
@@ -46,7 +47,6 @@ static esp_err_t root_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Serve static files from SPIFFS */
 static esp_err_t file_get_handler(httpd_req_t *req)
 {
     char filepath[FILEPATH_MAX];
@@ -92,12 +92,53 @@ static esp_err_t file_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief POST /api/robot/on
+ *
+ * Turns the robot on (relay -> ON, zero sensor, enter motor mode).
+ */
+static esp_err_t api_robot_on_handler(httpd_req_t *req)
+{
+    // We ignore request body (if any). Just call turn_on.
+    esp_err_t err = robot_controller_turn_on();
+    httpd_resp_set_type(req, "application/json");
+    if (err == ESP_OK)
+    {
+        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Robot turned ON successfully\"}");
+    }
+    else
+    {
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Failed to turn on\"}");
+    }
+    return ESP_OK;
+}
+
+/**
+ * @brief POST /api/robot/off
+ *
+ * Turns the robot off (drive to home, exit mode, relay -> OFF).
+ */
+static esp_err_t api_robot_off_handler(httpd_req_t *req)
+{
+    esp_err_t err = robot_controller_turn_off();
+    httpd_resp_set_type(req, "application/json");
+    if (err == ESP_OK)
+    {
+        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Robot turned OFF successfully\"}");
+    }
+    else
+    {
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Failed to turn off\"}");
+    }
+    return ESP_OK;
+}
+
 /*
  * POST /api/command
  * JSON body: {
  *   "motor_id": 1|2|3,
- *   "command": "enter_motor_mode"|"exit_motor_mode"|"zero_position_sensor"|"go_to_position",
- *   "position": <degrees> (if command == go_to_position)
+ *   "command": "go_to_position",
+ *   "position": <degrees>
  * }
  */
 static esp_err_t api_command_post_handler(httpd_req_t *req)
@@ -149,90 +190,57 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     int motor_id = motor_id_item->valueint;
     const char *cmd_str = command_item->valuestring;
 
-    // Build our new motor_command_t
-    motor_command_t cmd = {
-        .motor_id = motor_id,
-        .cmd_type = MOTOR_CMD_EXIT_MODE, // default, will override
-        .position = 0.0f};
-
-    if (strcmp(cmd_str, "enter_motor_mode") == 0)
-    {
-        cmd.cmd_type = MOTOR_CMD_ENTER_MODE;
-    }
-    else if (strcmp(cmd_str, "exit_motor_mode") == 0)
-    {
-        cmd.cmd_type = MOTOR_CMD_EXIT_MODE;
-    }
-    else if (strcmp(cmd_str, "zero_position_sensor") == 0)
-    {
-        cmd.cmd_type = MOTOR_CMD_ZERO_POS_SENSOR;
-    }
-    else if (strcmp(cmd_str, "go_to_position") == 0)
-    {
-        cmd.cmd_type = MOTOR_CMD_MOVE;
-        cJSON *pos_item = cJSON_GetObjectItem(root, "position");
-        if (!cJSON_IsNumber(pos_item))
-        {
-            cJSON_Delete(root);
-            httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing 'position' in degrees\"}");
-            return ESP_FAIL;
-        }
-        float deg = (float)pos_item->valuedouble;
-
-        float min_deg, max_deg;
-        switch (motor_id)
-        {
-        case 1:
-            min_deg = MOTOR1_MIN_ANGLE_DEG;
-            max_deg = MOTOR1_MAX_ANGLE_DEG;
-            break;
-        case 2:
-            min_deg = MOTOR2_MIN_ANGLE_DEG;
-            max_deg = MOTOR2_MAX_ANGLE_DEG;
-            break;
-        case 3:
-            min_deg = MOTOR3_MIN_ANGLE_DEG;
-            max_deg = MOTOR3_MAX_ANGLE_DEG;
-            break;
-        default:
-            cJSON_Delete(root);
-            httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid motor_id\"}");
-            return ESP_FAIL;
-        }
-
-        if (deg < min_deg || deg > max_deg)
-        {
-            cJSON_Delete(root);
-            char message[128];
-            snprintf(message, sizeof(message), "{\"status\":\"error\",\"message\":\"Position must be between %.1f and %.1f deg for motor %d\"}", min_deg, max_deg, motor_id);
-            httpd_resp_sendstr(req, message);
-            return ESP_FAIL;
-        }
-        // convert to radians
-        cmd.position = deg * (M_PI / 180.0f);
-    }
-    else
+    // We only allow "go_to_position" now
+    if (strcmp(cmd_str, "go_to_position") != 0)
     {
         cJSON_Delete(root);
-        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Unknown command\"}");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Unknown or disallowed command\"}");
         return ESP_FAIL;
     }
+
+    // Make sure robot state is ENGAGED_READY or OPERATING
+    robot_state_t rstate = robot_controller_get_state();
+    if (rstate != ROBOT_STATE_ENGAGED_READY && rstate != ROBOT_STATE_OPERATING)
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Robot is not turned on\"}");
+        return ESP_FAIL;
+    }
+
+    // Retrieve "position"
+    cJSON *pos_item = cJSON_GetObjectItem(root, "position");
+    if (!cJSON_IsNumber(pos_item))
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing or invalid 'position'\"}");
+        return ESP_FAIL;
+    }
+    float deg = (float)pos_item->valuedouble;
+
+    // Build command and pass to motor_control
+    motor_command_t cmd = {
+        .motor_id = motor_id,
+        .cmd_type = MOTOR_CMD_MOVE,
+        .position = deg * (M_PI / 180.0f) // convert to radians
+    };
 
     cJSON_Delete(root);
 
     esp_err_t err = motor_control_handle_command(&cmd);
+    httpd_resp_set_type(req, "application/json");
 
     if (err == ESP_OK)
     {
-        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Command executed successfully\"}");
+        robot_controller_set_state(ROBOT_STATE_OPERATING);
+        httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Move command accepted\"}");
     }
     else if (err == ESP_ERR_INVALID_ARG)
     {
-        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid motor_id or command type\"}");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid motor_id or position out of range\"}");
     }
     else if (err == ESP_ERR_INVALID_STATE)
     {
-        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Motor is busy or in invalid state\"}");
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Motor is busy or not engaged\"}");
     }
     else
     {
@@ -254,6 +262,19 @@ static httpd_uri_t uri_api_command = {
     .handler = api_command_post_handler,
     .user_ctx = NULL};
 
+/* New URIs for robot on/off */
+static httpd_uri_t uri_robot_on = {
+    .uri = "/api/robot/on",
+    .method = HTTP_POST,
+    .handler = api_robot_on_handler,
+    .user_ctx = NULL};
+
+static httpd_uri_t uri_robot_off = {
+    .uri = "/api/robot/off",
+    .method = HTTP_POST,
+    .handler = api_robot_off_handler,
+    .user_ctx = NULL};
+
 static httpd_uri_t file_uri = {
     .uri = "/*",
     .method = HTTP_GET,
@@ -271,6 +292,8 @@ httpd_handle_t http_server_start(void)
     {
         httpd_register_uri_handler(server, &uri_root);
         httpd_register_uri_handler(server, &uri_api_command);
+        httpd_register_uri_handler(server, &uri_robot_on);
+        httpd_register_uri_handler(server, &uri_robot_off);
         httpd_register_uri_handler(server, &file_uri);
 
         ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);

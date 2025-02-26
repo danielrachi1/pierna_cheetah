@@ -10,18 +10,15 @@
 #include <stdio.h>
 #include <math.h>
 
+#include "robot_controller.h"
+
 #define LOG_TAG "MOTOR_CONTROL"
 #define CAN_CMD_LENGTH 8
 
-// Example gains for each motor (not strictly used in this simplified approach)
-#define KP1 10
-#define KD1 0.1
-#define KP2 10
-#define KD2 0.1
-#define KP3 10
-#define KD3 0.1
-
 static motor_state_t motor_states[NUM_MOTORS];
+
+// Watchdog counters for each motor. If a motor hits 3 consecutive timeouts, forced shutdown triggers.
+static int s_motor_failure_count[NUM_MOTORS] = {0};
 
 void motor_control_init(void)
 {
@@ -35,6 +32,7 @@ void motor_control_init(void)
         motor_states[i].trajectory_index = 0;
         motor_states[i].trajectory_active = false;
         motor_states[i].current_position = 0.0f;
+        s_motor_failure_count[i] = 0;
         ESP_LOGI(LOG_TAG, "Motor %d initialized.", i + 1);
     }
 }
@@ -63,14 +61,12 @@ esp_err_t motor_control_sync_position(int motor_id)
 
     if (state->engaged)
     {
-        // Motor is engaged, use Enter Mode command to trigger sensor read
-        ESP_LOGI(LOG_TAG, "Motor %d: Sync by sending ENTER_MODE command.", motor_id);
+        // Use Enter Mode command to get updated reading
         err = can_bus_send_enter_mode(motor_id, &response);
     }
     else
     {
-        // Motor is not engaged, use Exit Mode command
-        ESP_LOGI(LOG_TAG, "Motor %d: Sync by sending EXIT_MODE command.", motor_id);
+        // Use Exit Mode command if not engaged
         err = can_bus_send_exit_mode(motor_id, &response);
     }
 
@@ -86,7 +82,7 @@ esp_err_t motor_control_sync_position(int motor_id)
         unpack_reply(response.data, &reply);
         state->current_position = reply.position;
         ESP_LOGI(LOG_TAG,
-                 "Motor %d: Sync complete => position=%.4f, velocity=%.4f, current=%.2f",
+                 "Motor %d: Sync => position=%.4f, velocity=%.4f, current=%.2f",
                  motor_id, reply.position, reply.velocity, reply.current);
         return ESP_OK;
     }
@@ -101,22 +97,18 @@ esp_err_t motor_control_sync_position(int motor_id)
 
 /**
  * @brief Helper for handling a "move" command (MOTOR_CMD_MOVE).
- *
- * Generates a new S‑curve trajectory if the motor is engaged and not busy.
  */
 static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad)
 {
-    // Must be engaged
     if (!state->engaged)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d is not engaged. Must enter mode first.", state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d is not engaged; must enter mode first.", state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
 
-    // If there's already an active trajectory, reject
     if (state->trajectory_active)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d is currently on a trajectory; rejecting new move command.", state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d is already executing a trajectory; can't accept new move.", state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -128,7 +120,7 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         return err;
     }
 
-    // Convert target position from radians to degrees for validation.
+    // Validate degrees
     float target_deg = target_position_rad * (180.0f / M_PI);
     float final_position_rad;
     switch (state->motor_id)
@@ -136,15 +128,18 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     case 1:
         if (target_deg < MOTOR1_MIN_ANGLE_DEG || target_deg > MOTOR1_MAX_ANGLE_DEG)
         {
-            ESP_LOGE(LOG_TAG, "Motor 1: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR1_MIN_ANGLE_DEG, MOTOR1_MAX_ANGLE_DEG);
+            ESP_LOGE(LOG_TAG, "Motor 1: Commanded angle %.2f deg out of range (%.2f - %.2f)",
+                     target_deg, MOTOR1_MIN_ANGLE_DEG, MOTOR1_MAX_ANGLE_DEG);
             return ESP_ERR_INVALID_ARG;
         }
-        final_position_rad = -target_position_rad; // invert for motor 1
+        // invert angle for motor 1
+        final_position_rad = -target_position_rad;
         break;
     case 2:
         if (target_deg < MOTOR2_MIN_ANGLE_DEG || target_deg > MOTOR2_MAX_ANGLE_DEG)
         {
-            ESP_LOGE(LOG_TAG, "Motor 2: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR2_MIN_ANGLE_DEG, MOTOR2_MAX_ANGLE_DEG);
+            ESP_LOGE(LOG_TAG, "Motor 2: Commanded angle %.2f deg out of range (%.2f - %.2f)",
+                     target_deg, MOTOR2_MIN_ANGLE_DEG, MOTOR2_MAX_ANGLE_DEG);
             return ESP_ERR_INVALID_ARG;
         }
         final_position_rad = target_position_rad;
@@ -152,25 +147,25 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     case 3:
         if (target_deg < MOTOR3_MIN_ANGLE_DEG || target_deg > MOTOR3_MAX_ANGLE_DEG)
         {
-            ESP_LOGE(LOG_TAG, "Motor 3: Commanded angle %.2f deg out of range (%.2f - %.2f)", target_deg, MOTOR3_MIN_ANGLE_DEG, MOTOR3_MAX_ANGLE_DEG);
+            ESP_LOGE(LOG_TAG, "Motor 3: Commanded angle %.2f deg out of range (%.2f - %.2f)",
+                     target_deg, MOTOR3_MIN_ANGLE_DEG, MOTOR3_MAX_ANGLE_DEG);
             return ESP_ERR_INVALID_ARG;
         }
         final_position_rad = target_position_rad;
         break;
     default:
-        ESP_LOGE(LOG_TAG, "Invalid motor id %d", state->motor_id);
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Clear any old trajectory
+    // Clear old trajectory if any
     if (state->trajectory)
     {
         motion_profile_free_trajectory(state->trajectory);
         state->trajectory = NULL;
-        state->trajectory_points = 0;
-        state->trajectory_index = 0;
-        state->trajectory_active = false;
     }
+    state->trajectory_points = 0;
+    state->trajectory_index = 0;
+    state->trajectory_active = false;
 
     ESP_LOGI(LOG_TAG, "Motor %d: Generating S‑curve from %.4f to %.4f (rad)",
              state->motor_id, state->current_position, final_position_rad);
@@ -200,14 +195,11 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     return ESP_OK;
 }
 
-/**
- * @brief Helper for handling a "enter mode" command (MOTOR_CMD_ENTER_MODE).
- */
 static esp_err_t handle_enter_mode(motor_state_t *state)
 {
     if (state->engaged)
     {
-        ESP_LOGI(LOG_TAG, "Motor %d is already engaged.", state->motor_id);
+        ESP_LOGI(LOG_TAG, "Motor %d already engaged.", state->motor_id);
         return ESP_OK;
     }
 
@@ -220,20 +212,17 @@ static esp_err_t handle_enter_mode(motor_state_t *state)
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Failed to enter motor mode: %s",
+        ESP_LOGE(LOG_TAG, "Motor %d: Enter Mode failed: %s",
                  state->motor_id, esp_err_to_name(err));
     }
     return err;
 }
 
-/**
- * @brief Helper for handling a "exit mode" command (MOTOR_CMD_EXIT_MODE).
- */
 static esp_err_t handle_exit_mode(motor_state_t *state)
 {
     if (!state->engaged)
     {
-        ESP_LOGI(LOG_TAG, "Motor %d is already disengaged.", state->motor_id);
+        ESP_LOGI(LOG_TAG, "Motor %d already disengaged.", state->motor_id);
         return ESP_OK;
     }
 
@@ -246,21 +235,19 @@ static esp_err_t handle_exit_mode(motor_state_t *state)
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Failed to exit motor mode: %s",
+        ESP_LOGE(LOG_TAG, "Motor %d: Exit Mode failed: %s",
                  state->motor_id, esp_err_to_name(err));
     }
     return err;
 }
 
-/**
- * @brief Helper for handling a "zero sensor" command (MOTOR_CMD_ZERO_POS_SENSOR).
- */
 static esp_err_t handle_zero_sensor(motor_state_t *state)
 {
+    // Setting zero sensor while engaged is dangerous
     if (state->engaged)
     {
         ESP_LOGE(LOG_TAG,
-                 "Motor %d: Cannot zero sensor while engaged. Rejecting command.",
+                 "Motor %d: Cannot zero sensor while engaged.",
                  state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
@@ -274,7 +261,7 @@ static esp_err_t handle_zero_sensor(motor_state_t *state)
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Failed to zero sensor: %s",
+        ESP_LOGE(LOG_TAG, "Motor %d: Zero sensor failed: %s",
                  state->motor_id, esp_err_to_name(err));
     }
     return err;
@@ -287,7 +274,6 @@ esp_err_t motor_control_handle_command(const motor_command_t *command)
         ESP_LOGE(LOG_TAG, "NULL command pointer in handle_command");
         return ESP_ERR_INVALID_ARG;
     }
-
     motor_state_t *state = motor_control_get_state(command->motor_id);
     if (!state)
     {
@@ -321,6 +307,15 @@ void motor_control_task(void *arg)
 
     while (1)
     {
+        robot_state_t rstate = robot_controller_get_state();
+        // If shutting down or in error, we do not run normal trajectories
+        if (rstate == ROBOT_STATE_SHUTTING_DOWN || rstate == ROBOT_STATE_ERROR)
+        {
+            vTaskDelay(delay_ticks);
+            continue;
+        }
+
+        // Normal operation
         for (int i = 0; i < NUM_MOTORS; i++)
         {
             motor_state_t *state = &motor_states[i];
@@ -361,10 +356,14 @@ void motor_control_task(void *arg)
                          pt->position,
                          pt->velocity);
 
-                // Send and get response
                 twai_message_t response;
-                if (can_bus_request_response(can_msg_data, CAN_CMD_LENGTH, state->motor_id, &response) == ESP_OK)
+                esp_err_t err = can_bus_request_response(can_msg_data, CAN_CMD_LENGTH, state->motor_id, &response);
+
+                if (err == ESP_OK)
                 {
+                    // Reset failure count for this motor
+                    s_motor_failure_count[i] = 0;
+
                     if (response.data_length_code == 6)
                     {
                         motor_reply_t reply = {0};
@@ -381,19 +380,29 @@ void motor_control_task(void *arg)
                                  "Motor %d: No 6-byte feedback (got %d bytes).",
                                  state->motor_id, response.data_length_code);
                     }
+
+                    // Move to next trajectory point
+                    state->trajectory_index++;
+                    if (state->trajectory_index >= state->trajectory_points)
+                    {
+                        state->trajectory_active = false;
+                        ESP_LOGI(LOG_TAG, "Motor %d: Trajectory completed.", state->motor_id);
+                    }
                 }
                 else
                 {
-                    ESP_LOGE(LOG_TAG, "Motor %d: Failed sending setpoint %d.",
-                             state->motor_id, state->trajectory_index + 1);
-                }
+                    // CAN failure or timeout
+                    s_motor_failure_count[i]++;
+                    ESP_LOGE(LOG_TAG, "Motor %d: CAN transmit/receive failed. Consecutive errors = %d",
+                             state->motor_id, s_motor_failure_count[i]);
 
-                // Increment trajectory index
-                state->trajectory_index++;
-                if (state->trajectory_index >= state->trajectory_points)
-                {
-                    state->trajectory_active = false;
-                    ESP_LOGI(LOG_TAG, "Motor %d: Trajectory completed.", state->motor_id);
+                    if (s_motor_failure_count[i] >= 3)
+                    {
+                        // Trigger forced shutdown
+                        robot_controller_handle_motor_error(state->motor_id);
+                        // Break out of loop
+                        break;
+                    }
                 }
             }
         }
@@ -402,4 +411,51 @@ void motor_control_task(void *arg)
     }
 
     vTaskDelete(NULL);
+}
+
+esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, int timeout_ticks)
+{
+    motor_state_t *state = motor_control_get_state(motor_id);
+    if (!state)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // Issue move command
+    motor_command_t cmd = {
+        .motor_id = motor_id,
+        .cmd_type = MOTOR_CMD_MOVE,
+        .position = target_position_rad};
+    esp_err_t err = motor_control_handle_command(&cmd);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    // Wait until trajectory completes or time out
+    TickType_t start = xTaskGetTickCount();
+    while (1)
+    {
+        // If in error or shutting down, break
+        robot_state_t rstate = robot_controller_get_state();
+        if (rstate == ROBOT_STATE_ERROR || rstate == ROBOT_STATE_SHUTTING_DOWN)
+        {
+            return ESP_ERR_INVALID_STATE;
+        }
+        // Check trajectory
+        if (!state->trajectory_active)
+        {
+            // Completed
+            return ESP_OK;
+        }
+        // Check timeout
+        TickType_t now = xTaskGetTickCount();
+        if ((now - start) > timeout_ticks)
+        {
+            ESP_LOGW(LOG_TAG, "motor_control_move_blocking: Motor %d timed out waiting for trajectory finish.", motor_id);
+            return ESP_ERR_TIMEOUT;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    // Unreachable
 }

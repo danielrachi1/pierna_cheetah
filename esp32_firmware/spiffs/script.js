@@ -11,64 +11,94 @@ function showNotification(message, type) {
 }
 
 /**
- * Sends a JSON command to /api/command
- * @param {number} motorId 
- * @param {string} commandName 
- * @param {number} positionDeg 
+ * Switch UI to Off view
  */
-function sendJsonCommand(motorId, commandName, positionDeg) {
+function showOffView() {
+    document.getElementById('robot-off').classList.remove('hidden');
+    document.getElementById('robot-on').classList.add('hidden');
+}
+
+/**
+ * Switch UI to On view
+ */
+function showOnView() {
+    document.getElementById('robot-off').classList.add('hidden');
+    document.getElementById('robot-on').classList.remove('hidden');
+}
+
+/**
+ * Turn the robot on (POST /api/robot/on)
+ */
+function turnRobotOn() {
+    fetch('/api/robot/on', { method: 'POST' })
+        .then(res => res.json())
+        .then(jsonResp => {
+            if (jsonResp.status === 'ok') {
+                showNotification("Robot turned on", 'success');
+                showOnView();
+            } else {
+                showNotification(jsonResp.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification("Error: " + err.message, 'error');
+        });
+}
+
+/**
+ * Turn the robot off (POST /api/robot/off)
+ */
+function turnRobotOff() {
+    fetch('/api/robot/off', { method: 'POST' })
+        .then(res => res.json())
+        .then(jsonResp => {
+            if (jsonResp.status === 'ok') {
+                showNotification("Robot turned off", 'success');
+                showOffView();
+            } else {
+                showNotification(jsonResp.message, 'error');
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showNotification("Error: " + err.message, 'error');
+        });
+}
+
+/**
+ * Send a position command to the currently selected motor
+ */
+function sendPositionCommand() {
+    let motorId = parseInt(document.getElementById('motor_id').value);
+    let deg = parseFloat(document.getElementById('position_deg').value);
+
     let payload = {
         motor_id: motorId,
-        command: commandName
+        command: "go_to_position",
+        position: deg
     };
-
-    if (commandName === 'go_to_position') {
-        let angle = parseFloat(positionDeg);
-        if (isNaN(angle) || angle < 0 || angle > 360) {
-            showNotification("Position must be 0-360 degrees.", 'error');
-            return;
-        }
-        payload.position = angle;
-    }
 
     fetch('/api/command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
-        .then(res => res.text().then(txt => ({ status: res.status, text: txt })))
-        .then(({ status, text }) => {
-            if (status >= 200 && status < 300) {
-                let jsonResp;
-                try {
-                    jsonResp = JSON.parse(text);
-                } catch (e) {
-                    showNotification("Malformed JSON response", 'error');
-                    return;
-                }
-
-                if (jsonResp.status === 'ok') {
-                    showNotification(jsonResp.message, 'success');
-                } else {
-                    showNotification(jsonResp.message, 'error');
-                }
+        .then(res => res.json())
+        .then(jsonResp => {
+            if (jsonResp.status === 'ok') {
+                showNotification(jsonResp.message, 'success');
             } else {
-                showNotification("HTTP " + status + ": " + text, 'error');
+                showNotification(jsonResp.message, 'error');
             }
         })
         .catch(err => {
             console.error(err);
-            showNotification("Fetch error: " + err.message, 'error');
+            showNotification("Error: " + err.message, 'error');
         });
 }
 
-function sendSpecialCommand(cmdName) {
-    let motorId = parseInt(document.getElementById('motor_id_special').value);
-    sendJsonCommand(motorId, cmdName, null);
-}
-
-function sendPositionOnlyCommand() {
-    let motorId = parseInt(document.getElementById('motor_id_position').value);
-    let deg = parseFloat(document.getElementById('position_only').value);
-    sendJsonCommand(motorId, 'go_to_position', deg);
-}
+// On page load, assume Off
+document.addEventListener('DOMContentLoaded', function () {
+    showOffView();
+});
