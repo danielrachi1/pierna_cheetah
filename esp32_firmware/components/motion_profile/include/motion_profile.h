@@ -7,29 +7,9 @@
 /**
  * @file motion_profile.h
  * @brief S-curve motion profile generation for smooth motor control.
- *
- * This component provides functions to generate a series of setpoints for
- * position, velocity, and optionally acceleration, using an S-curve motion
- * profile. The S-curve profile ensures smooth starting and stopping of the
- * motor by controlling jerk (the derivative of acceleration), resulting in
- * reduced mechanical stress and smoother motion.
- *
- * The typical use-case is:
- * 1. Determine the start and end conditions of the motion (start position, end position,
- *    start velocity, end velocity).
- * 2. Define the maximum velocity, maximum acceleration, and maximum jerk allowed.
- * 3. Call the motion_profile_generate_s_curve() function to generate a trajectory
- *    consisting of discrete time steps. Each step includes position, velocity, and
- *    acceleration setpoints.
- * 4. The calling code can then send these setpoints to the motor controller at
- *    regular intervals to achieve smooth motion.
- *
- * @note This module is configurable at compile time via the #defines below. Adjust
- * these parameters as needed for your system.
  */
 
 /* Configuration Parameters (can be adjusted as needed) */
-// BE VERY CAREFUL WHEN CHANGING THESE VALUES THE MOTORS WILL MOVE *FAST*
 #define MP_DEFAULT_MAX_VEL 5.0f   ///< Default maximum velocity (rad/s)
 #define MP_DEFAULT_MAX_ACC 10.0f  ///< Default maximum acceleration (rad/s^2)
 #define MP_DEFAULT_MAX_JERK 50.0f ///< Default maximum jerk (rad/s^3)
@@ -47,10 +27,6 @@ typedef struct
 
 /**
  * @brief Generate an S-curve motion profile trajectory.
- *
- * This function generates a series of setpoints (position, velocity, acceleration) for
- * an S-curve motion from a given start state to an end state. The profile adheres to
- * the specified maximum velocity, acceleration, and jerk constraints.
  *
  * @param start_pos     Starting position (radians).
  * @param start_vel     Starting velocity (rad/s).

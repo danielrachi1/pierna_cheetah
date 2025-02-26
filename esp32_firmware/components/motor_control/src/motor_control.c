@@ -95,10 +95,26 @@ esp_err_t motor_control_sync_position(int motor_id)
     }
 }
 
+static float get_motor_max_speed_dps(int motor_id)
+{
+    switch (motor_id)
+    {
+    case 1:
+        return MOTOR1_MAX_SPEED_DPS;
+    case 2:
+        return MOTOR2_MAX_SPEED_DPS;
+    case 3:
+        return MOTOR3_MAX_SPEED_DPS;
+    default:
+        return MOTOR1_MAX_SPEED_DPS;
+    }
+}
+
 /**
  * @brief Helper for handling a "move" command (MOTOR_CMD_MOVE).
+ *        speed_percentage is 0..100 => scaled maximum velocity.
  */
-static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad)
+static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad, float speed_percentage)
 {
     if (!state->engaged)
     {
@@ -157,6 +173,11 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         return ESP_ERR_INVALID_ARG;
     }
 
+    // Compute max velocity from speed percentage
+    float motor_dps = get_motor_max_speed_dps(state->motor_id);
+    float user_dps = (speed_percentage / 100.0f) * motor_dps; // 0..motor_dps
+    float user_rads = user_dps * (M_PI / 180.0f);
+
     // Clear old trajectory if any
     if (state->trajectory)
     {
@@ -167,15 +188,15 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     state->trajectory_index = 0;
     state->trajectory_active = false;
 
-    ESP_LOGI(LOG_TAG, "Motor %d: Generating S‑curve from %.4f to %.4f (rad)",
-             state->motor_id, state->current_position, final_position_rad);
+    ESP_LOGI(LOG_TAG, "Motor %d: Generating S‑curve from %.4f to %.4f (rad) with max_vel=%.4f rad/s (%.2f%%)",
+             state->motor_id, state->current_position, final_position_rad, user_rads, speed_percentage);
 
     bool success = motion_profile_generate_s_curve(
         state->current_position,
         0.0f, // start velocity
         final_position_rad,
-        0.0f, // end velocity
-        MP_DEFAULT_MAX_VEL,
+        0.0f,      // end velocity
+        user_rads, // max velocity depends on user's speed %
         MP_DEFAULT_MAX_ACC,
         MP_DEFAULT_MAX_JERK,
         MP_TIME_STEP,
@@ -292,7 +313,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command)
         return handle_zero_sensor(state);
 
     case MOTOR_CMD_MOVE:
-        return handle_move_command(state, command->position);
+        return handle_move_command(state, command->position, command->speed_percentage);
 
     default:
         ESP_LOGE(LOG_TAG, "Invalid command type for motor %d", command->motor_id);
@@ -421,11 +442,12 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Issue move command
+    // We'll default to speed=10% for blocking moves (you can adjust as needed).
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
-        .position = target_position_rad};
+        .position = target_position_rad,
+        .speed_percentage = 10.0f};
     esp_err_t err = motor_control_handle_command(&cmd);
     if (err != ESP_OK)
     {

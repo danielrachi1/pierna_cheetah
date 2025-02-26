@@ -9,6 +9,8 @@
  * This function creates and starts the HTTP server, registers URI handlers for:
  * - Root (serving index.html)
  * - POST /api/command (for all motor commands as JSON)
+ * - POST /api/robot/on
+ * - POST /api/robot/off
  * - Wildcard file handler (for static files in SPIFFS)
  *
  * @return httpd_handle_t The handle to the HTTP server, or NULL on error.

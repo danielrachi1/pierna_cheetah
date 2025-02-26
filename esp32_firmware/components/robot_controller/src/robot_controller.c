@@ -25,10 +25,6 @@ static SemaphoreHandle_t s_state_mutex = NULL;
 // Forward declarations
 static esp_err_t set_motors_engaged_flag(bool engaged);
 
-/**
- * @brief Reads the "motors_engaged" flag from NVS.
- * Exposed as a public helper.
- */
 bool robot_controller_get_motors_engaged_flag(void)
 {
     nvs_handle_t handle;
@@ -48,7 +44,6 @@ bool robot_controller_get_motors_engaged_flag(void)
     return false;
 }
 
-// Internal NVS helper to write the flag.
 static esp_err_t set_motors_engaged_flag(bool engaged)
 {
     nvs_handle_t handle;
@@ -75,9 +70,6 @@ static esp_err_t relay_set(bool enable)
     return ESP_OK;
 }
 
-// -------------------------
-// Mutex-protected state get/set
-// -------------------------
 void robot_controller_init(void)
 {
     if (!s_state_mutex)
@@ -111,9 +103,6 @@ void robot_controller_set_state(robot_state_t new_state)
     }
 }
 
-// -------------------------
-// Public logic
-// -------------------------
 esp_err_t robot_controller_turn_on(void)
 {
     ESP_LOGI(TAG, "Turn On requested...");

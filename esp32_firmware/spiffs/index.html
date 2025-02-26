@@ -38,6 +38,11 @@
             <label for="position_deg">Angle (degrees)</label>
             <input type="number" id="position_deg" min="-180" max="360" step="0.1" value="0">
         </div>
+        <div>
+            <label for="speed">Speed (0-100)</label>
+            <!-- A simple range slider from 0..100. Default 10. -->
+            <input type="range" id="speed" min="0" max="100" step="1" value="10" />
+        </div>
         <button class="btn" onclick="sendPositionCommand()">Send Position</button>
         <hr>
         <button class="btn" onclick="turnRobotOff()">Turn Off</button>

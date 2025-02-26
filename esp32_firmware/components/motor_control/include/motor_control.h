@@ -29,9 +29,10 @@ typedef enum
  */
 typedef struct
 {
-    int motor_id;                  ///< Motor identifier (1‑indexed)
+    int motor_id;                  ///< Motor identifier (1-based)
     motor_command_type_t cmd_type; ///< Type of command
     float position;                ///< Used only if cmd_type == MOTOR_CMD_MOVE, in radians
+    float speed_percentage;        ///< Speed setting 0..100 for MOTOR_CMD_MOVE
 } motor_command_t;
 
 /**
@@ -39,7 +40,7 @@ typedef struct
  */
 typedef struct
 {
-    int motor_id;                       ///< Motor identifier (1‑indexed).
+    int motor_id;                       ///< Motor identifier (1-based).
     bool engaged;                       ///< True if in motor mode.
     motion_profile_point_t *trajectory; ///< Active trajectory setpoints, or NULL if none.
     int trajectory_points;              ///< Total number of points in the trajectory.
@@ -110,5 +111,13 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
 #define MOTOR2_MAX_ANGLE_DEG 180.0f
 #define MOTOR3_MIN_ANGLE_DEG -135.0f
 #define MOTOR3_MAX_ANGLE_DEG 135.0f
+
+/**
+ * @brief Maximum speed (degrees/s) for each motor at 100% speed setting.
+ * You may customize these values.
+ */
+#define MOTOR1_MAX_SPEED_DPS 180.0f
+#define MOTOR2_MAX_SPEED_DPS 360.0f
+#define MOTOR3_MAX_SPEED_DPS 90.0f
 
 #endif // MOTOR_CONTROL_H

@@ -137,6 +137,7 @@ static esp_err_t api_robot_off_handler(httpd_req_t *req)
  * POST /api/command
  * JSON body: {
  *   "motor_id": 1|2|3,
+ *   "speed": 0..100,
  *   "command": "go_to_position",
  *   "position": <degrees>
  * }
@@ -190,7 +191,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     int motor_id = motor_id_item->valueint;
     const char *cmd_str = command_item->valuestring;
 
-    // We only allow "go_to_position" now
+    // We only allow "go_to_position" right now
     if (strcmp(cmd_str, "go_to_position") != 0)
     {
         cJSON_Delete(root);
@@ -217,12 +218,26 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     }
     float deg = (float)pos_item->valuedouble;
 
+    // Retrieve "speed" (0..100)
+    cJSON *speed_item = cJSON_GetObjectItem(root, "speed");
+    if (!cJSON_IsNumber(speed_item))
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing or invalid 'speed'\"}");
+        return ESP_FAIL;
+    }
+    float speed_percentage = (float)speed_item->valuedouble;
+    if (speed_percentage < 0.0f)
+        speed_percentage = 0.0f;
+    if (speed_percentage > 100.0f)
+        speed_percentage = 100.0f;
+
     // Build command and pass to motor_control
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
-        .position = deg * (M_PI / 180.0f) // convert to radians
-    };
+        .position = deg * (M_PI / 180.0f), // convert to radians
+        .speed_percentage = speed_percentage};
 
     cJSON_Delete(root);
 

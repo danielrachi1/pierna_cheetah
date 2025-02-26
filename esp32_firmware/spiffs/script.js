@@ -72,9 +72,11 @@ function turnRobotOff() {
 function sendPositionCommand() {
     let motorId = parseInt(document.getElementById('motor_id').value);
     let deg = parseFloat(document.getElementById('position_deg').value);
+    let speed = parseFloat(document.getElementById('speed').value);
 
     let payload = {
         motor_id: motorId,
+        speed: speed,
         command: "go_to_position",
         position: deg
     };
