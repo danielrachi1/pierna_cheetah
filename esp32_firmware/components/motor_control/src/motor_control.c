@@ -388,9 +388,7 @@ void motor_control_task(void *arg)
         robot_state_t rstate = robot_controller_get_state();
 
         // Skip sending setpoints if we're OFF, SHUTTING_DOWN, or in ERROR
-        if (rstate == ROBOT_STATE_SHUTTING_DOWN ||
-            rstate == ROBOT_STATE_ERROR ||
-            rstate == ROBOT_STATE_OFF)
+        if (rstate == ROBOT_STATE_OFF)
         {
             vTaskDelay(delay_ticks);
             continue;
@@ -529,9 +527,7 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
     {
         // If in error or shutting down/off, stop
         robot_state_t rstate = robot_controller_get_state();
-        if (rstate == ROBOT_STATE_ERROR ||
-            rstate == ROBOT_STATE_SHUTTING_DOWN ||
-            rstate == ROBOT_STATE_OFF)
+        if (rstate == ROBOT_STATE_OFF)
         {
             return ESP_ERR_INVALID_STATE;
         }

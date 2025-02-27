@@ -86,12 +86,13 @@ robot_state_t robot_controller_get_state(void)
     {
         tmp = s_robot_state;
         xSemaphoreGive(s_state_mutex);
+        return tmp;
     }
     else
     {
-        tmp = ROBOT_STATE_ERROR;
+        ESP_LOGE(TAG, "Failed to get robot state.");
+        return ESP_FAIL;
     }
-    return tmp;
 }
 
 void robot_controller_set_state(robot_state_t new_state)
@@ -111,13 +112,12 @@ esp_err_t robot_controller_turn_on(void)
         return ESP_FAIL;
     }
 
-    if (s_robot_state != ROBOT_STATE_OFF && s_robot_state != ROBOT_STATE_INITIALIZING)
+    if (s_robot_state != ROBOT_STATE_OFF)
     {
         ESP_LOGW(TAG, "Turn on called in state %d, ignoring.", s_robot_state);
         xSemaphoreGive(s_state_mutex);
         return ESP_ERR_INVALID_STATE;
     }
-    s_robot_state = ROBOT_STATE_INITIALIZING;
     xSemaphoreGive(s_state_mutex);
 
     // 1) Relay ON
@@ -176,8 +176,8 @@ esp_err_t robot_controller_turn_off(void)
         return ESP_FAIL;
     }
 
-    // If already OFF or shutting down, skip
-    if (s_robot_state == ROBOT_STATE_OFF || s_robot_state == ROBOT_STATE_SHUTTING_DOWN)
+    // If already OFF, skip
+    if (s_robot_state == ROBOT_STATE_OFF)
     {
         ESP_LOGW(TAG, "Already OFF, ignoring.");
         xSemaphoreGive(s_state_mutex);
@@ -197,9 +197,6 @@ esp_err_t robot_controller_turn_off(void)
             ESP_LOGW(TAG, "Motor %d failed to reach home (or timed out). Err: %s", i, esp_err_to_name(err));
         }
     }
-
-    // Now that we've successfully moved them, set to SHUTTING_DOWN
-    robot_controller_set_state(ROBOT_STATE_SHUTTING_DOWN);
 
     // 2) Exit motor mode on all motors
     for (int i = 1; i <= NUM_MOTORS; i++)
@@ -228,8 +225,7 @@ esp_err_t robot_controller_turn_off(void)
 
 void robot_controller_handle_motor_error(int motor_id)
 {
-    ESP_LOGE(TAG, "Motor %d error triggered. Switching to ERROR state and forcing shutdown.", motor_id);
-    robot_controller_set_state(ROBOT_STATE_ERROR);
+    ESP_LOGE(TAG, "Motor %d error triggered. Shutting down.", motor_id);
     esp_err_t err_off;
     err_off = robot_controller_turn_off();
     ESP_LOGW(TAG, "Failed to shutdown. err: %s", esp_err_to_name(err_off));

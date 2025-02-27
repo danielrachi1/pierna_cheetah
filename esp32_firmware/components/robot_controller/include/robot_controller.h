@@ -10,11 +10,8 @@
 typedef enum
 {
     ROBOT_STATE_OFF,           ///< Robot is fully off, relay disabled, motors unpowered
-    ROBOT_STATE_INITIALIZING,  ///< In the process of powering on
     ROBOT_STATE_ENGAGED_READY, ///< Relay on, motors engaged, ready to accept position commands
     ROBOT_STATE_OPERATING,     ///< Actively sending commands (e.g., trajectory in progress)
-    ROBOT_STATE_ERROR,         ///< An error has occurred (e.g., repeated CAN timeouts)
-    ROBOT_STATE_SHUTTING_DOWN  ///< In the process of turning off
 } robot_state_t;
 
 /**
