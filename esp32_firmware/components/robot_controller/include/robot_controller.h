@@ -65,21 +65,9 @@ esp_err_t robot_controller_turn_on(void);
  *  4) Clear NVS flag (motors_engaged = false)
  *  5) Robot goes to ROBOT_STATE_OFF
  *
- * @return ESP_OK on success; otherwise forced shutdown is invoked.
+ * @return ESP_OK on success.
  */
 esp_err_t robot_controller_turn_off(void);
-
-/**
- * @brief Immediately forces a system shutdown to ensure safety:
- *  1) Move all motors to home (0.0) quickly (best effort)
- *  2) Exit motor mode
- *  3) Disable relay
- *  4) Clear NVS flag
- *  5) Robot goes to ROBOT_STATE_OFF
- *
- * @return ESP_OK always (best effort).
- */
-esp_err_t robot_controller_forced_shutdown(void);
 
 /**
  * @brief Called when a motor experiences repeated CAN timeouts or other critical fault.

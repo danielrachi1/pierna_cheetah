@@ -54,7 +54,7 @@ void app_main(void)
     if (robot_controller_get_motors_engaged_flag())
     {
         ESP_LOGW(LOG_TAG, "Detected leftover engaged motors; forcing shutdown now...");
-        robot_controller_forced_shutdown();
+        robot_controller_turn_off();
     }
     else
     {
