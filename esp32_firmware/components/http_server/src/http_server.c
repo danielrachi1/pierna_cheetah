@@ -201,7 +201,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
 
     // Make sure robot state is ENGAGED_READY or OPERATING
     robot_state_t rstate = robot_controller_get_state();
-    if (rstate != ROBOT_STATE_ENGAGED_READY && rstate != ROBOT_STATE_OPERATING)
+    if (rstate != ROBOT_STATE_ENGAGED_READY)
     {
         cJSON_Delete(root);
         httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Robot is not turned on\"}");
@@ -247,8 +247,6 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
 
     if (err == ESP_OK)
     {
-        // If a move command is accepted, we can set state to OPERATING
-        robot_controller_set_state(ROBOT_STATE_OPERATING);
         httpd_resp_sendstr(req, "{\"status\":\"ok\",\"message\":\"Move command accepted\"}");
     }
     else if (err == ESP_ERR_INVALID_ARG)
