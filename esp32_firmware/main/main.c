@@ -9,8 +9,7 @@
 #include "http_server.h"
 #include "motor_control.h"
 #include "driver/gpio.h"
-
-#include "robot_controller.h" // new module
+#include "robot_controller.h"
 
 #define LOG_TAG "ESP32_FIRMWARE"
 #define TASK_STACK_SIZE 4096
@@ -50,15 +49,11 @@ void app_main(void)
     motor_control_init();
     xTaskCreate(motor_control_task, "motor_control_task", TASK_STACK_SIZE, NULL, 10, NULL);
 
-    // Check if motors were engaged from previous run using the helper function
+    // If leftover motors were engaged, force shutdown now
     if (robot_controller_get_motors_engaged_flag())
     {
         ESP_LOGW(LOG_TAG, "Detected leftover engaged motors; forcing shutdown now...");
         robot_controller_turn_off();
-    }
-    else
-    {
-        robot_controller_set_state(ROBOT_STATE_OFF);
     }
 
     // Start Wi-Fi and mDNS
@@ -68,7 +63,7 @@ void app_main(void)
     // Start HTTP server
     http_server_start();
 
-    // 8. Configure relay GPIO as OUTPUT but ensure it's off initially
+    // Configure relay GPIO as OUTPUT but ensure it's off initially
     gpio_reset_pin(GPIO_NUM_4);
     gpio_set_direction(GPIO_NUM_4, GPIO_MODE_OUTPUT);
     gpio_set_level(GPIO_NUM_4, 0);

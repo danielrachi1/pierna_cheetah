@@ -6,8 +6,6 @@
 #include "esp_err.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
 
 #include "can_bus.h"
 #include "motor_control.h"
@@ -18,12 +16,13 @@ static const char *TAG = "ROBOT_CONTROLLER";
 #define NVS_NAMESPACE "storage"
 #define NVS_KEY_MOTORS_ENGAGED "motors_engaged"
 
-// Global (static) state
-static robot_state_t s_robot_state = ROBOT_STATE_OFF;
-static SemaphoreHandle_t s_state_mutex = NULL;
+// A single global (static) boolean indicating if robot is engaged (true) or off (false).
+static bool s_robot_engaged = false;
 
-// Forward declarations
-static esp_err_t set_motors_engaged_flag(bool engaged);
+bool robot_controller_is_engaged(void)
+{
+    return s_robot_engaged;
+}
 
 bool robot_controller_get_motors_engaged_flag(void)
 {
@@ -44,6 +43,7 @@ bool robot_controller_get_motors_engaged_flag(void)
     return false;
 }
 
+// Helper to write the "motors_engaged" flag in NVS
 static esp_err_t set_motors_engaged_flag(bool engaged)
 {
     nvs_handle_t handle;
@@ -72,53 +72,20 @@ static esp_err_t relay_set(bool enable)
 
 void robot_controller_init(void)
 {
-    if (!s_state_mutex)
-    {
-        s_state_mutex = xSemaphoreCreateMutex();
-    }
-    s_robot_state = ROBOT_STATE_OFF;
-}
-
-robot_state_t robot_controller_get_state(void)
-{
-    robot_state_t tmp;
-    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY))
-    {
-        tmp = s_robot_state;
-        xSemaphoreGive(s_state_mutex);
-        return tmp;
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to get robot state.");
-        return ESP_FAIL;
-    }
-}
-
-void robot_controller_set_state(robot_state_t new_state)
-{
-    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY))
-    {
-        s_robot_state = new_state;
-        xSemaphoreGive(s_state_mutex);
-    }
+    // Simply start off as "not engaged"
+    s_robot_engaged = false;
 }
 
 esp_err_t robot_controller_turn_on(void)
 {
     ESP_LOGI(TAG, "Turn On requested...");
-    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) == pdFALSE)
-    {
-        return ESP_FAIL;
-    }
 
-    if (s_robot_state != ROBOT_STATE_OFF)
+    // If already engaged, warn and return
+    if (s_robot_engaged)
     {
-        ESP_LOGW(TAG, "Turn on called in state %d, ignoring.", s_robot_state);
-        xSemaphoreGive(s_state_mutex);
+        ESP_LOGW(TAG, "Robot is already engaged, ignoring");
         return ESP_ERR_INVALID_STATE;
     }
-    xSemaphoreGive(s_state_mutex);
 
     // 1) Relay ON
     relay_set(true);
@@ -131,18 +98,18 @@ esp_err_t robot_controller_turn_on(void)
         if (err != ESP_OK)
         {
             ESP_LOGE(TAG, "Zero sensor failed on motor %d: %s", i, esp_err_to_name(err));
-            robot_controller_turn_off();
+            robot_controller_turn_off(); // Force shutdown if one fails
             return ESP_FAIL;
         }
     }
 
-    // 3) Enter motor mode on all motors via motor_control
+    // 3) Enter motor mode
     for (int i = 1; i <= NUM_MOTORS; i++)
     {
         motor_command_t cmd = {
             .motor_id = i,
             .cmd_type = MOTOR_CMD_ENTER_MODE,
-            .position = 0.0f // Not used for enter mode
+            .position = 0.0f // not used for enter mode
         };
         esp_err_t err = motor_control_handle_command(&cmd);
         if (err != ESP_OK)
@@ -153,7 +120,7 @@ esp_err_t robot_controller_turn_on(void)
         }
     }
 
-    // 4) Update motors_engaged in NVS
+    // 4) Mark engaged in NVS
     esp_err_t err = set_motors_engaged_flag(true);
     if (err != ESP_OK)
     {
@@ -162,31 +129,22 @@ esp_err_t robot_controller_turn_on(void)
         return ESP_FAIL;
     }
 
-    // 5) Set state to ENGAGED_READY
-    robot_controller_set_state(ROBOT_STATE_ENGAGED_READY);
-    ESP_LOGI(TAG, "Robot successfully turned on. State = ENGAGED_READY");
+    // 5) Set our local boolean
+    s_robot_engaged = true;
+    ESP_LOGI(TAG, "Robot successfully turned on. Engaged = true");
     return ESP_OK;
 }
 
 esp_err_t robot_controller_turn_off(void)
 {
     ESP_LOGI(TAG, "Turn Off requested...");
-    if (xSemaphoreTake(s_state_mutex, portMAX_DELAY) == pdFALSE)
-    {
-        return ESP_FAIL;
-    }
 
-    // If already OFF, skip
-    if (s_robot_state == ROBOT_STATE_OFF)
+    // If already off, do nothing
+    if (!s_robot_engaged)
     {
-        ESP_LOGW(TAG, "Already OFF, ignoring.");
-        xSemaphoreGive(s_state_mutex);
+        ESP_LOGW(TAG, "Already off, ignoring.");
         return ESP_OK;
     }
-
-    // s_robot_state = ROBOT_STATE_ENGAGED_READY; (not strictly necessary)
-
-    xSemaphoreGive(s_state_mutex);
 
     // 1) Move all motors to home (0.0)
     for (int i = 1; i <= NUM_MOTORS; i++)
@@ -212,13 +170,15 @@ esp_err_t robot_controller_turn_off(void)
     // 3) Disable relay
     relay_set(false);
 
-    // 4) Clear motors_engaged flag in NVS
-    esp_err_t err_nvs;
-    err_nvs = set_motors_engaged_flag(false);
-    ESP_LOGW(TAG, "Failed to clear NVS flag. err: %s", esp_err_to_name(err_nvs));
+    // 4) Clear the engaged flag in NVS
+    esp_err_t err_nvs = set_motors_engaged_flag(false);
+    if (err_nvs != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Failed to clear NVS flag. err: %s", esp_err_to_name(err_nvs));
+    }
 
-    // 5) Finally set state to OFF
-    robot_controller_set_state(ROBOT_STATE_OFF);
+    // 5) Clear our local boolean
+    s_robot_engaged = false;
     ESP_LOGI(TAG, "Robot is now OFF.");
     return ESP_OK;
 }
@@ -226,7 +186,9 @@ esp_err_t robot_controller_turn_off(void)
 void robot_controller_handle_motor_error(int motor_id)
 {
     ESP_LOGE(TAG, "Motor %d error triggered. Shutting down.", motor_id);
-    esp_err_t err_off;
-    err_off = robot_controller_turn_off();
-    ESP_LOGW(TAG, "Failed to shutdown. err: %s", esp_err_to_name(err_off));
+    esp_err_t err_off = robot_controller_turn_off();
+    if (err_off != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Failed to shutdown. err: %s", esp_err_to_name(err_off));
+    }
 }

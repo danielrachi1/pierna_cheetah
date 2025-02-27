@@ -95,7 +95,7 @@ static esp_err_t file_get_handler(httpd_req_t *req)
 /**
  * @brief POST /api/robot/on
  *
- * Turns the robot on (relay -> ON, zero sensor, enter motor mode).
+ * Turns the robot on.
  */
 static esp_err_t api_robot_on_handler(httpd_req_t *req)
 {
@@ -116,7 +116,7 @@ static esp_err_t api_robot_on_handler(httpd_req_t *req)
 /**
  * @brief POST /api/robot/off
  *
- * Turns the robot off (drive to home, exit mode, relay -> OFF).
+ * Turns the robot off.
  */
 static esp_err_t api_robot_off_handler(httpd_req_t *req)
 {
@@ -191,7 +191,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     int motor_id = motor_id_item->valueint;
     const char *cmd_str = command_item->valuestring;
 
-    // We only allow "go_to_position" right now
+    // We only allow "go_to_position" for now
     if (strcmp(cmd_str, "go_to_position") != 0)
     {
         cJSON_Delete(root);
@@ -199,16 +199,14 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
 
-    // Make sure robot state is ENGAGED_READY or OPERATING
-    robot_state_t rstate = robot_controller_get_state();
-    if (rstate != ROBOT_STATE_ENGAGED_READY)
+    // Check if the robot is engaged
+    if (!robot_controller_is_engaged())
     {
         cJSON_Delete(root);
         httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Robot is not turned on\"}");
         return ESP_FAIL;
     }
 
-    // Retrieve "position"
     cJSON *pos_item = cJSON_GetObjectItem(root, "position");
     if (!cJSON_IsNumber(pos_item))
     {
@@ -218,7 +216,6 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     }
     float deg = (float)pos_item->valuedouble;
 
-    // Retrieve "speed" (1..100)
     cJSON *speed_item = cJSON_GetObjectItem(root, "speed");
     if (!cJSON_IsNumber(speed_item))
     {
@@ -227,8 +224,6 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
     float speed_percentage = (float)speed_item->valuedouble;
-
-    // Clamp to [1..100] so 0% is not allowed anymore
     if (speed_percentage < 1.0f)
         speed_percentage = 1.0f;
     if (speed_percentage > 100.0f)
@@ -240,7 +235,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
-        .position = deg * (M_PI / 180.0f), // convert to radians
+        .position = deg * (M_PI / 180.0f),
         .speed_percentage = speed_percentage};
 
     esp_err_t err = motor_control_handle_command(&cmd);
@@ -277,7 +272,6 @@ static httpd_uri_t uri_api_command = {
     .handler = api_command_post_handler,
     .user_ctx = NULL};
 
-/* New URIs for robot on/off */
 static httpd_uri_t uri_robot_on = {
     .uri = "/api/robot/on",
     .method = HTTP_POST,

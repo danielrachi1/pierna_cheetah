@@ -19,29 +19,23 @@
 static motor_state_t motor_states[NUM_MOTORS];
 
 // If true, we invert this motor's angles (commands & feedback).
-// This is how you handle physically reversed motors.
 static bool s_inverted[NUM_MOTORS] = {
     true,  // Motor 1 is inverted (example)
     false, // Motor 2 is normal
-    false  // Motor 3 is normal (set to true if you need to invert #3)
+    false  // Motor 3 is normal
 };
 
-// Watchdog counters for each motor. If a motor hits 3 consecutive timeouts, forced shutdown triggers.
+// Watchdog counters
 static int s_motor_failure_count[NUM_MOTORS] = {0};
 
-// Inline helpers to unify the angle inversion logic.
-// "User space" means the angle as your high-level code or motion_profile sees it (0..+180, etc).
-// "Hardware space" is the raw sign as the motor hardware expects.
+// Inline helpers for angle conversions
 static inline float to_user_angle(int motor_id, float hardware_angle)
 {
-    // If s_inverted is true, user space = -hardware space.
-    // Otherwise user space = hardware space
     return s_inverted[motor_id - 1] ? -hardware_angle : hardware_angle;
 }
 
 static inline float from_user_angle(int motor_id, float user_angle)
 {
-    // Reverse of above. If inverted, hardware = -user space.
     return s_inverted[motor_id - 1] ? -user_angle : user_angle;
 }
 
@@ -56,22 +50,10 @@ void motor_control_init(void)
         motor_states[i].trajectory_points = 0;
         motor_states[i].trajectory_index = 0;
         motor_states[i].trajectory_active = false;
-        motor_states[i].current_position = 0.0f; // stored in "user space"
+        motor_states[i].current_position = 0.0f; // user-space
         s_motor_failure_count[i] = 0;
         ESP_LOGI(LOG_TAG, "Motor %d initialized.", i + 1);
     }
-}
-
-// Optional helper if you want to dynamically change inversions at runtime
-esp_err_t motor_control_set_inverted(int motor_id, bool inverted)
-{
-    if (motor_id < 1 || motor_id > NUM_MOTORS)
-    {
-        return ESP_ERR_INVALID_ARG;
-    }
-    s_inverted[motor_id - 1] = inverted;
-    ESP_LOGI(LOG_TAG, "Motor %d inversion set to %s", motor_id, inverted ? "true" : "false");
-    return ESP_OK;
 }
 
 motor_state_t *motor_control_get_state(int motor_id)
@@ -118,7 +100,6 @@ esp_err_t motor_control_sync_position(int motor_id)
         motor_reply_t reply = {0};
         unpack_reply(response.data, &reply);
 
-        // Convert raw hardware angle to user space
         float user_angle = to_user_angle(motor_id, reply.position);
         state->current_position = user_angle;
 
@@ -152,51 +133,33 @@ static float get_motor_max_speed_dps(int motor_id)
     }
 }
 
-/**
- * @brief Check if a user-space angle is within that motor's valid range (in degrees).
- */
 static esp_err_t check_angle_range(int motor_id, float angle_deg)
 {
     switch (motor_id)
     {
     case 1:
         if (angle_deg < MOTOR1_MIN_ANGLE_DEG || angle_deg > MOTOR1_MAX_ANGLE_DEG)
-        {
-            ESP_LOGE(LOG_TAG, "Motor 1: angle %.2f deg out of range (%.2f..%.2f)",
-                     angle_deg, MOTOR1_MIN_ANGLE_DEG, MOTOR1_MAX_ANGLE_DEG);
-            return ESP_ERR_INVALID_ARG;
-        }
+            goto out_of_range;
         break;
-
     case 2:
         if (angle_deg < MOTOR2_MIN_ANGLE_DEG || angle_deg > MOTOR2_MAX_ANGLE_DEG)
-        {
-            ESP_LOGE(LOG_TAG, "Motor 2: angle %.2f deg out of range (%.2f..%.2f)",
-                     angle_deg, MOTOR2_MIN_ANGLE_DEG, MOTOR2_MAX_ANGLE_DEG);
-            return ESP_ERR_INVALID_ARG;
-        }
+            goto out_of_range;
         break;
-
     case 3:
         if (angle_deg < MOTOR3_MIN_ANGLE_DEG || angle_deg > MOTOR3_MAX_ANGLE_DEG)
-        {
-            ESP_LOGE(LOG_TAG, "Motor 3: angle %.2f deg out of range (%.2f..%.2f)",
-                     angle_deg, MOTOR3_MIN_ANGLE_DEG, MOTOR3_MAX_ANGLE_DEG);
-            return ESP_ERR_INVALID_ARG;
-        }
+            goto out_of_range;
         break;
-
     default:
         ESP_LOGE(LOG_TAG, "Unknown motor ID %d in check_angle_range.", motor_id);
         return ESP_ERR_INVALID_ARG;
     }
     return ESP_OK;
+
+out_of_range:
+    ESP_LOGE(LOG_TAG, "Motor %d: angle %.2f deg out of range", motor_id, angle_deg);
+    return ESP_ERR_INVALID_ARG;
 }
 
-/**
- * @brief Helper for handling a "move" command (MOTOR_CMD_MOVE).
- *        speed_percentage is in [1..100].
- */
 static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad, float speed_percentage)
 {
     if (!state->engaged)
@@ -207,11 +170,11 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
 
     if (state->trajectory_active)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d is already executing a trajectory; can't accept new move.", state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d is already executing a trajectory.", state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
 
-    // 1) Sync current user-space position
+    // 1) Sync current position
     esp_err_t err = motor_control_sync_position(state->motor_id);
     if (err != ESP_OK)
     {
@@ -219,20 +182,20 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         return err;
     }
 
-    // 2) Check user-space angle range
+    // 2) Check angle range
     float target_deg = target_position_rad * (180.0f / M_PI);
     err = check_angle_range(state->motor_id, target_deg);
     if (err != ESP_OK)
     {
-        return err; // out of range
+        return err;
     }
 
-    // 3) Compute max velocity (rad/s) from speed_percentage
+    // 3) Compute max velocity in rad/s
     float motor_dps = get_motor_max_speed_dps(state->motor_id);
-    float user_dps = (speed_percentage / 100.0f) * motor_dps; // now in [1%..100%] of that motor's max
+    float user_dps = (speed_percentage / 100.0f) * motor_dps;
     float user_rads = user_dps * (M_PI / 180.0f);
 
-    // 4) Clear any old trajectory
+    // 4) Clear old trajectory if any
     if (state->trajectory)
     {
         motion_profile_free_trajectory(state->trajectory);
@@ -242,17 +205,16 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     state->trajectory_index = 0;
     state->trajectory_active = false;
 
-    // 5) Generate an S-curve in user space
-    //    From the current user-space angle to the target user-space angle
-    ESP_LOGI(LOG_TAG, "Motor %d: Generating S‑curve from %.4f rad to %.4f rad, max_vel=%.4f rad/s (%.0f%%)",
+    // 5) Generate S-curve
+    ESP_LOGI(LOG_TAG, "Motor %d: Generating trajectory from %.4f rad to %.4f rad, max_vel=%.4f rad/s (%.0f%%)",
              state->motor_id, state->current_position, target_position_rad, user_rads, speed_percentage);
 
     bool success = motion_profile_generate_s_curve(
-        state->current_position, // start in user space
-        0.0f,                    // start velocity
-        target_position_rad,     // end in user space
-        0.0f,                    // end velocity
-        user_rads,               // speed limit
+        state->current_position,
+        0.0f, // start vel
+        target_position_rad,
+        0.0f,      // end vel
+        user_rads, // speed limit
         MP_DEFAULT_MAX_ACC,
         MP_DEFAULT_MAX_JERK,
         MP_TIME_STEP,
@@ -260,14 +222,13 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         &state->trajectory_points);
     if (!success)
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate S‑curve.", state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d: Failed to generate trajectory", state->motor_id);
         return ESP_FAIL;
     }
 
     state->trajectory_active = true;
     state->trajectory_index = 0;
-    ESP_LOGI(LOG_TAG, "Motor %d: S‑curve created with %d points.",
-             state->motor_id, state->trajectory_points);
+    ESP_LOGI(LOG_TAG, "Motor %d: Trajectory created with %d points.", state->motor_id, state->trajectory_points);
 
     return ESP_OK;
 }
@@ -289,8 +250,7 @@ static esp_err_t handle_enter_mode(motor_state_t *state)
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Enter Mode failed: %s",
-                 state->motor_id, esp_err_to_name(err));
+        ESP_LOGE(LOG_TAG, "Motor %d: Enter Mode failed: %s", state->motor_id, esp_err_to_name(err));
     }
     return err;
 }
@@ -312,20 +272,16 @@ static esp_err_t handle_exit_mode(motor_state_t *state)
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Exit Mode failed: %s",
-                 state->motor_id, esp_err_to_name(err));
+        ESP_LOGE(LOG_TAG, "Motor %d: Exit Mode failed: %s", state->motor_id, esp_err_to_name(err));
     }
     return err;
 }
 
 static esp_err_t handle_zero_sensor(motor_state_t *state)
 {
-    // Setting zero sensor while engaged is dangerous
     if (state->engaged)
     {
-        ESP_LOGE(LOG_TAG,
-                 "Motor %d: Cannot zero sensor while engaged.",
-                 state->motor_id);
+        ESP_LOGE(LOG_TAG, "Motor %d: Cannot zero sensor while engaged.", state->motor_id);
         return ESP_ERR_INVALID_STATE;
     }
 
@@ -333,14 +289,12 @@ static esp_err_t handle_zero_sensor(motor_state_t *state)
     esp_err_t err = can_bus_send_zero_pos_sensor(state->motor_id, &response);
     if (err == ESP_OK)
     {
-        // Also set local current_position=0 in user space
         state->current_position = 0.0f;
         ESP_LOGI(LOG_TAG, "Motor %d: Zero Position successful; user-space=0.0f", state->motor_id);
     }
     else
     {
-        ESP_LOGE(LOG_TAG, "Motor %d: Zero sensor failed: %s",
-                 state->motor_id, esp_err_to_name(err));
+        ESP_LOGE(LOG_TAG, "Motor %d: Zero sensor failed: %s", state->motor_id, esp_err_to_name(err));
     }
     return err;
 }
@@ -385,16 +339,14 @@ void motor_control_task(void *arg)
 
     while (1)
     {
-        robot_state_t rstate = robot_controller_get_state();
-
-        // Skip sending setpoints if we're OFF, SHUTTING_DOWN, or in ERROR
-        if (rstate == ROBOT_STATE_OFF)
+        // If the robot is not engaged, skip sending setpoints
+        if (!robot_controller_is_engaged())
         {
             vTaskDelay(delay_ticks);
             continue;
         }
 
-        // Normal operation
+        // Normal operation: update each motor if it has an active trajectory
         for (int i = 0; i < NUM_MOTORS; i++)
         {
             motor_state_t *state = &motor_states[i];
@@ -402,7 +354,6 @@ void motor_control_task(void *arg)
             {
                 motion_profile_point_t *pt = &state->trajectory[state->trajectory_index];
 
-                // Gains
                 float kp_current = 0.0f;
                 float kd_current = 0.0f;
                 switch (state->motor_id)
@@ -423,11 +374,9 @@ void motor_control_task(void *arg)
                     break;
                 }
 
-                // Convert user-space setpoint to hardware space
                 float hardware_pos = from_user_angle(state->motor_id, pt->position);
                 float hardware_vel = from_user_angle(state->motor_id, pt->velocity);
 
-                // Pack data for the T-motor style control
                 uint8_t can_msg_data[CAN_CMD_LENGTH] = {0};
                 pack_cmd(hardware_pos, hardware_vel, kp_current, kd_current, 0.0f, can_msg_data);
 
@@ -439,28 +388,22 @@ void motor_control_task(void *arg)
                          pt->position, pt->velocity,
                          hardware_pos, hardware_vel);
 
-                // Send and read feedback
                 twai_message_t response;
                 esp_err_t err = can_bus_request_response(can_msg_data, CAN_CMD_LENGTH, state->motor_id, &response);
-
                 if (err == ESP_OK)
                 {
-                    // Reset failure count
                     s_motor_failure_count[i] = 0;
 
                     if (response.data_length_code == 6)
                     {
                         motor_reply_t reply = {0};
                         unpack_reply(response.data, &reply);
-
-                        // Convert hardware angle back to user space
                         float user_angle = to_user_angle(state->motor_id, reply.position);
                         state->current_position = user_angle;
 
                         ESP_LOGI(LOG_TAG,
                                  "Motor %d: Feedback => hw_pos=%.4f,hw_vel=%.4f => user_pos=%.4f, current=%.2f",
-                                 state->motor_id, reply.position, reply.velocity,
-                                 user_angle, reply.current);
+                                 state->motor_id, reply.position, reply.velocity, user_angle, reply.current);
                     }
                     else
                     {
@@ -469,7 +412,7 @@ void motor_control_task(void *arg)
                                  state->motor_id, response.data_length_code);
                     }
 
-                    // Advance trajectory
+                    // Move on to the next setpoint
                     state->trajectory_index++;
                     if (state->trajectory_index >= state->trajectory_points)
                     {
@@ -479,7 +422,6 @@ void motor_control_task(void *arg)
                 }
                 else
                 {
-                    // CAN failure or timeout
                     s_motor_failure_count[i]++;
                     ESP_LOGE(LOG_TAG, "Motor %d: CAN transmit/receive failed. Consecutive errors = %d",
                              state->motor_id, s_motor_failure_count[i]);
@@ -488,7 +430,7 @@ void motor_control_task(void *arg)
                     {
                         // Trigger forced shutdown
                         robot_controller_handle_motor_error(state->motor_id);
-                        // Break out
+                        // break out
                         break;
                     }
                 }
@@ -509,32 +451,30 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
         return ESP_ERR_INVALID_ARG;
     }
 
-    // We'll default to speed=10% for blocking moves (you can adjust).
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
-        .position = target_position_rad, // user space
-        .speed_percentage = 10.0f};
+        .position = target_position_rad,
+        .speed_percentage = 10.0f // default 10% speed
+    };
     esp_err_t err = motor_control_handle_command(&cmd);
     if (err != ESP_OK)
     {
         return err;
     }
 
-    // Wait until trajectory completes or time out
     TickType_t start = xTaskGetTickCount();
     while (1)
     {
-        // If in error or shutting down/off, stop
-        robot_state_t rstate = robot_controller_get_state();
-        if (rstate == ROBOT_STATE_OFF)
+        // If robot is off mid-move, abort
+        if (!robot_controller_is_engaged())
         {
             return ESP_ERR_INVALID_STATE;
         }
 
+        // If trajectory is finished
         if (!state->trajectory_active)
         {
-            // Completed
             return ESP_OK;
         }
 
@@ -545,5 +485,4 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
         }
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    // unreachable
 }
