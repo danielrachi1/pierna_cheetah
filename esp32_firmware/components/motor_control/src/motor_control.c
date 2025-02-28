@@ -18,6 +18,19 @@
 // Per-motor state
 static motor_state_t motor_states[NUM_MOTORS];
 
+// Global flag indicating a batch is in progress.
+static bool s_batch_in_progress = false; // remains static
+
+void motor_control_set_batch_in_progress(bool in_progress)
+{
+    s_batch_in_progress = in_progress;
+}
+
+bool motor_control_is_batch_in_progress(void)
+{
+    return s_batch_in_progress;
+}
+
 // If true, we invert this motor's angles (commands & feedback).
 static bool s_inverted[NUM_MOTORS] = {
     true,  // Motor 1 is inverted (example)
@@ -51,6 +64,12 @@ void motor_control_init(void)
         motor_states[i].trajectory_index = 0;
         motor_states[i].trajectory_active = false;
         motor_states[i].current_position = 0.0f; // user-space
+        // Initialize batch fields
+        motor_states[i].batch_commands = NULL;
+        motor_states[i].batch_count = 0;
+        motor_states[i].batch_index = 0;
+        motor_states[i].batch_error = false;
+        motor_states[i].batch_error_message[0] = '\0';
         s_motor_failure_count[i] = 0;
         ESP_LOGI(LOG_TAG, "Motor %d initialized.", i + 1);
     }
@@ -154,7 +173,6 @@ static esp_err_t check_angle_range(int motor_id, float angle_deg)
         return ESP_ERR_INVALID_ARG;
     }
     return ESP_OK;
-
 out_of_range:
     ESP_LOGE(LOG_TAG, "Motor %d: angle %.2f deg out of range", motor_id, angle_deg);
     return ESP_ERR_INVALID_ARG;
@@ -332,6 +350,24 @@ esp_err_t motor_control_handle_command(const motor_command_t *command)
     }
 }
 
+static void global_batch_abort(void)
+{
+    ESP_LOGE(LOG_TAG, "Global batch abort triggered.");
+    // For each motor, clear its batch commands and reset batch state.
+    for (int i = 0; i < NUM_MOTORS; i++)
+    {
+        if (motor_states[i].batch_commands)
+        {
+            free(motor_states[i].batch_commands);
+            motor_states[i].batch_commands = NULL;
+        }
+        motor_states[i].batch_count = 0;
+        motor_states[i].batch_index = 0;
+        motor_states[i].batch_error = true; // mark as error occurred
+    }
+    s_batch_in_progress = false;
+}
+
 void motor_control_task(void *arg)
 {
     ESP_LOGI(LOG_TAG, "Starting Motor Control Task...");
@@ -346,10 +382,11 @@ void motor_control_task(void *arg)
             continue;
         }
 
-        // Normal operation: update each motor if it has an active trajectory
+        // For each motor
         for (int i = 0; i < NUM_MOTORS; i++)
         {
             motor_state_t *state = &motor_states[i];
+            // Process trajectory if active (existing code)
             if (state->trajectory_active && state->trajectory_index < state->trajectory_points)
             {
                 motion_profile_point_t *pt = &state->trajectory[state->trajectory_index];
@@ -412,12 +449,18 @@ void motor_control_task(void *arg)
                                  state->motor_id, response.data_length_code);
                     }
 
-                    // Move on to the next setpoint
+                    // Advance trajectory index
                     state->trajectory_index++;
                     if (state->trajectory_index >= state->trajectory_points)
                     {
                         state->trajectory_active = false;
                         ESP_LOGI(LOG_TAG, "Motor %d: Trajectory completed.", state->motor_id);
+                        // Free old trajectory
+                        if (state->trajectory)
+                        {
+                            free(state->trajectory);
+                            state->trajectory = NULL;
+                        }
                     }
                 }
                 else
@@ -428,18 +471,46 @@ void motor_control_task(void *arg)
 
                     if (s_motor_failure_count[i] >= 3)
                     {
-                        // Trigger forced shutdown
+                        // Trigger forced shutdown (global abort)
                         robot_controller_handle_motor_error(state->motor_id);
-                        // break out
+                        global_batch_abort();
                         break;
                     }
                 }
             }
+            // --- Batch processing ---
+            // If no trajectory is active and a batch is loaded for this motor, process the next command.
+            if (!state->trajectory_active && state->batch_commands && state->batch_index < state->batch_count)
+            {
+                motor_command_t cmd = state->batch_commands[state->batch_index];
+                ESP_LOGI(LOG_TAG, "Motor %d: Processing batch command %d/%d",
+                         state->motor_id, state->batch_index + 1, state->batch_count);
+                esp_err_t err = motor_control_handle_command(&cmd);
+                if (err == ESP_OK)
+                {
+                    state->batch_index++;
+                    // Note: motor_control_handle_command will start a new trajectory,
+                    // and its progress is handled above.
+                }
+                else
+                {
+                    snprintf(state->batch_error_message, sizeof(state->batch_error_message),
+                             "Command %d failed: %s", state->batch_index, esp_err_to_name(err));
+                    state->batch_error = true;
+                    global_batch_abort();
+                }
+                // If we have finished all commands for this motor, clear the batch.
+                if (state->batch_index >= state->batch_count)
+                {
+                    free(state->batch_commands);
+                    state->batch_commands = NULL;
+                    state->batch_count = 0;
+                    state->batch_index = 0;
+                }
+            }
         }
-
         vTaskDelay(delay_ticks);
     }
-
     vTaskDelete(NULL);
 }
 

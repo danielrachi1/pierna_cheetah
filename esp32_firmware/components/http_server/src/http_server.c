@@ -299,6 +299,232 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+static esp_err_t api_command_batch_handler(httpd_req_t *req)
+{
+    int total_len = req->content_len;
+    int cur_len = 0;
+    int received = 0;
+    char *buf = malloc(total_len + 1);
+    if (!buf)
+    {
+        ESP_LOGE(TAG, "Failed to allocate POST buffer");
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Memory allocation failed");
+        return ESP_FAIL;
+    }
+    while (cur_len < total_len)
+    {
+        received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
+        if (received <= 0)
+        {
+            if (received == HTTPD_SOCK_ERR_TIMEOUT)
+                continue;
+            free(buf);
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+    httpd_resp_set_type(req, "application/json");
+
+    if (check_recovery_needed(req) != ESP_OK)
+    {
+        free(buf);
+        return ESP_FAIL;
+    }
+
+    // Do not accept a new batch if one is in progress.
+    for (int i = 1; i <= NUM_MOTORS; i++)
+    {
+        motor_state_t *state = motor_control_get_state(i);
+        if (state && state->batch_commands != NULL)
+        {
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Batch already in progress\"}");
+            free(buf);
+            return ESP_FAIL;
+        }
+    }
+
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    if (!root)
+    {
+        httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid JSON\"}");
+        return ESP_FAIL;
+    }
+    cJSON *batch_array = cJSON_GetObjectItem(root, "batch");
+    if (!cJSON_IsArray(batch_array))
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Missing 'batch' array\"}");
+        return ESP_FAIL;
+    }
+
+    // Temporary per-motor command count arrays.
+    int counts[NUM_MOTORS] = {0};
+    int total_commands = cJSON_GetArraySize(batch_array);
+
+    // First pass: Validate each command and count per motor.
+    for (int i = 0; i < total_commands; i++)
+    {
+        cJSON *cmd_item = cJSON_GetArrayItem(batch_array, i);
+        if (!cmd_item)
+            continue;
+        cJSON *motor_id_item = cJSON_GetObjectItem(cmd_item, "motor_id");
+        cJSON *command_item = cJSON_GetObjectItem(cmd_item, "command");
+        cJSON *position_item = cJSON_GetObjectItem(cmd_item, "position");
+        cJSON *speed_item = cJSON_GetObjectItem(cmd_item, "speed");
+        if (!cJSON_IsNumber(motor_id_item) || !cJSON_IsString(command_item) ||
+            !cJSON_IsNumber(position_item) || !cJSON_IsNumber(speed_item))
+        {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid command format in batch\"}");
+            return ESP_FAIL;
+        }
+        int motor_id = motor_id_item->valueint;
+        if (motor_id < 1 || motor_id > NUM_MOTORS)
+        {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid motor_id in batch\"}");
+            return ESP_FAIL;
+        }
+        // Only allow "go_to_position" commands.
+        if (strcmp(command_item->valuestring, "go_to_position") != 0)
+        {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Unsupported command type in batch\"}");
+            return ESP_FAIL;
+        }
+        // You may add additional range checks here if desired.
+        counts[motor_id - 1]++;
+    }
+
+    // Second pass: Allocate per-motor arrays and load commands.
+    for (int i = 0; i < NUM_MOTORS; i++)
+    {
+        if (counts[i] > 0)
+        {
+            motor_state_t *state = motor_control_get_state(i + 1);
+            state->batch_commands = malloc(sizeof(motor_command_t) * counts[i]);
+            if (!state->batch_commands)
+            {
+                cJSON_Delete(root);
+                httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Memory allocation failed for batch\"}");
+                return ESP_FAIL;
+            }
+            state->batch_count = counts[i];
+            state->batch_index = 0;
+            state->batch_error = false;
+            state->batch_error_message[0] = '\0';
+        }
+    }
+    // Third pass: Copy commands into the per-motor arrays.
+    int indices[NUM_MOTORS] = {0};
+    for (int i = 0; i < total_commands; i++)
+    {
+        cJSON *cmd_item = cJSON_GetArrayItem(batch_array, i);
+        int motor_id = cJSON_GetObjectItem(cmd_item, "motor_id")->valueint;
+        // Convert position from degrees to radians.
+        float position_deg = (float)cJSON_GetObjectItem(cmd_item, "position")->valuedouble;
+        float position_rad = position_deg * (M_PI / 180.0f);
+        float speed = (float)cJSON_GetObjectItem(cmd_item, "speed")->valuedouble;
+
+        motor_command_t command = {
+            .motor_id = motor_id,
+            .cmd_type = MOTOR_CMD_MOVE,
+            .position = position_rad,
+            .speed_percentage = speed};
+        motor_state_t *state = motor_control_get_state(motor_id);
+        state->batch_commands[indices[motor_id - 1]++] = command;
+    }
+    cJSON_Delete(root);
+
+    // Mark global batch in progress.
+    motor_control_set_batch_in_progress(true);
+
+    // Wait (polling) until all motors have finished processing their batches or an error occurs.
+    const int max_wait_ticks = 10000; // e.g., 10 seconds timeout
+    int waited = 0;
+    const int poll_delay_ms = 100;
+    bool abort_occurred = false;
+    while (waited < max_wait_ticks)
+    {
+        abort_occurred = false;
+        bool all_done = true;
+        for (int i = 0; i < NUM_MOTORS; i++)
+        {
+            motor_state_t *state = motor_control_get_state(i + 1);
+            if (state->batch_commands != NULL)
+            {
+                all_done = false;
+            }
+            if (state->batch_error)
+            {
+                abort_occurred = true;
+            }
+        }
+        if (all_done || abort_occurred)
+            break;
+        vTaskDelay(pdMS_TO_TICKS(poll_delay_ms));
+        waited += poll_delay_ms;
+    }
+    motor_control_set_batch_in_progress(false);
+
+    // Build response JSON
+    cJSON *resp = cJSON_CreateObject();
+    if (!resp)
+    {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+    if (abort_occurred)
+    {
+        cJSON_AddStringToObject(resp, "global_status", "error");
+    }
+    else
+    {
+        cJSON_AddStringToObject(resp, "global_status", "ok");
+    }
+    cJSON *motors_arr = cJSON_CreateArray();
+    for (int i = 0; i < NUM_MOTORS; i++)
+    {
+        motor_state_t *state = motor_control_get_state(i + 1);
+        cJSON *mobj = cJSON_CreateObject();
+        cJSON_AddNumberToObject(mobj, "motor_id", state->motor_id);
+        if (state->batch_error)
+        {
+            cJSON_AddStringToObject(mobj, "status", "error");
+            cJSON_AddStringToObject(mobj, "error_message", state->batch_error_message);
+            cJSON_AddNumberToObject(mobj, "commands_executed", state->batch_index);
+        }
+        else
+        {
+            cJSON_AddStringToObject(mobj, "status", "ok");
+            // If no batch was loaded for this motor, commands_executed is 0.
+            cJSON_AddNumberToObject(mobj, "commands_executed", state->batch_index);
+        }
+        cJSON_AddItemToArray(motors_arr, mobj);
+    }
+    cJSON_AddItemToObject(resp, "motors", motors_arr);
+    char *resp_str = cJSON_Print(resp);
+    cJSON_Delete(resp);
+    if (resp_str)
+    {
+        httpd_resp_sendstr(req, resp_str);
+        free(resp_str);
+    }
+    else
+    {
+        httpd_resp_send_500(req);
+    }
+    return ESP_OK;
+}
+
+static httpd_uri_t uri_command_batch = {
+    .uri = "/api/command/batch",
+    .method = HTTP_POST,
+    .handler = api_command_batch_handler,
+    .user_ctx = NULL};
+
 static httpd_uri_t uri_root = {
     .uri = "/",
     .method = HTTP_GET,
@@ -350,6 +576,7 @@ httpd_handle_t http_server_start(void)
         httpd_register_uri_handler(server, &uri_robot_off);
         httpd_register_uri_handler(server, &uri_recovery_clear);
         httpd_register_uri_handler(server, &file_uri);
+        httpd_register_uri_handler(server, &uri_command_batch);
         ESP_LOGI(TAG, "HTTP server started on port %d", config.server_port);
         return server;
     }

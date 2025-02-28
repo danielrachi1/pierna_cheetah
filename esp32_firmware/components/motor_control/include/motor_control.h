@@ -47,7 +47,23 @@ typedef struct
     int trajectory_index;               ///< Current trajectory index.
     bool trajectory_active;             ///< True if a trajectory is being executed.
     float current_position;             ///< Last known sensor reading.
+    // --- New Batch Fields ---
+    motor_command_t *batch_commands; ///< Array of commands loaded from a batch.
+    int batch_count;                 ///< Total number of commands in the batch.
+    int batch_index;                 ///< Next command index to execute.
+    bool batch_error;                ///< True if a command failed in this batch.
+    char batch_error_message[64];    ///< Error message if a failure occurred.
 } motor_state_t;
+
+/**
+ *  @brief Setter for batch in progress
+ */
+void motor_control_set_batch_in_progress(bool in_progress);
+
+/**
+ *  @brief Getter for batch in progress
+ */
+bool motor_control_is_batch_in_progress(void);
 
 /**
  * @brief Initializes the motor control module and motor states.
