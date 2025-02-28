@@ -117,8 +117,8 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
 #define KD1 1
 #define KP2 6
 #define KD2 1
-#define KP3 0
-#define KD3 0
+#define KP3 26
+#define KD3 2
 
 /* Motion limits for each motor (in degrees) */
 #define MOTOR1_MIN_ANGLE_DEG 0.0f
@@ -134,6 +134,6 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
  */
 #define MOTOR1_MAX_SPEED_DPS 360.0f
 #define MOTOR2_MAX_SPEED_DPS 360.0f
-#define MOTOR3_MAX_SPEED_DPS 90.0f
+#define MOTOR3_MAX_SPEED_DPS 360.0f
 
 #endif // MOTOR_CONTROL_H
