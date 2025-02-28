@@ -1,48 +1,56 @@
 #ifndef MOTION_PROFILE_H
 #define MOTION_PROFILE_H
 
-#include <stdint.h>
 #include <stdbool.h>
 
-/**
- * @file motion_profile.h
- * @brief S-curve motion profile generation for smooth motor control.
- */
-
 /* Configuration Parameters (can be adjusted as needed) */
-#define MP_DEFAULT_MAX_VEL 5.0f   ///< Default maximum velocity (rad/s)
-#define MP_DEFAULT_MAX_ACC 10.0f  ///< Default maximum acceleration (rad/s^2)
+#define MP_DEFAULT_MAX_ACC 20.0f  ///< Default maximum acceleration (rad/s^2)
 #define MP_DEFAULT_MAX_JERK 50.0f ///< Default maximum jerk (rad/s^3)
 #define MP_TIME_STEP 0.01f        ///< Default time step for trajectory generation (seconds)
 
 /**
- * @brief A single trajectory point in the S-curve profile.
+ * @brief Structure representing a single point in a motion trajectory.
+ *
+ * - position: position in radians.
+ * - velocity: velocity in radians per second.
+ * - acceleration: acceleration in radians per second squared.
  */
 typedef struct
 {
-    float position;     ///< Position setpoint (radians)
-    float velocity;     ///< Velocity setpoint (rad/s)
-    float acceleration; ///< Acceleration setpoint (rad/s^2)
+    float position;
+    float velocity;
+    float acceleration;
 } motion_profile_point_t;
 
 /**
- * @brief Generate an S-curve motion profile trajectory.
+ * @brief Generates a simplified S-curve trajectory.
  *
- * @param start_pos     Starting position (radians).
- * @param start_vel     Starting velocity (rad/s).
- * @param end_pos       Target ending position (radians).
- * @param end_vel       Target ending velocity (rad/s).
- * @param max_vel       Maximum allowed velocity (rad/s).
- * @param max_acc       Maximum allowed acceleration (rad/s^2).
- * @param max_jerk      Maximum allowed jerk (rad/s^3).
- * @param time_step     Time increment for each trajectory point (seconds).
- * @param trajectory    Pointer to a pointer. On success, this function allocates memory
- *                      and sets *trajectory to point to the newly allocated array of
- *                      motion_profile_point_t. The caller is responsible for freeing
- *                      this memory when done.
- * @param num_points    Pointer to an integer that will be set to the number of points
- *                      generated in the trajectory.
- * @return true if the trajectory was successfully generated, false otherwise.
+ * This function produces a trajectory that moves from a starting position (start_pos) with an
+ * initial velocity (start_vel) to an ending position (end_pos) with a final velocity (end_vel), while
+ * respecting specified limits on maximum velocity (max_vel) and maximum acceleration (max_acc). The
+ * max_jerk parameter is provided for interface consistency but is ignored in this simplified version.
+ *
+ * The trajectory is split into three phases:
+ *   1. Acceleration phase: ramping up from start_vel to max_vel (or a lower peak if a triangular profile is needed),
+ *   2. Optional cruise phase: moving at constant max_vel,
+ *   3. Deceleration phase: ramping down from max_vel to end_vel.
+ *
+ * The function automatically computes a new peak velocity if the total distance is too short to reach
+ * the provided max_vel. All internal calculations are performed using absolute values, and the sign
+ * (direction) is applied only when assigning the final trajectory points.
+ *
+ * @param start_pos Starting position (radians).
+ * @param start_vel Starting velocity (radians per second).
+ * @param end_pos Ending position (radians).
+ * @param end_vel Ending velocity (radians per second).
+ * @param max_vel Maximum allowed velocity (radians per second).
+ * @param max_acc Maximum allowed acceleration (radians per second squared).
+ * @param max_jerk Maximum allowed jerk (radians per second cubed) (ignored in this simplified implementation).
+ * @param time_step Sampling interval for the trajectory (seconds).
+ * @param trajectory Output pointer which will point to an allocated array of trajectory points.
+ *                   The caller must free this memory using motion_profile_free_trajectory().
+ * @param num_points Output pointer for the number of trajectory points generated.
+ * @return true if the trajectory is successfully generated, false otherwise.
  */
 bool motion_profile_generate_s_curve(float start_pos,
                                      float start_vel,
@@ -56,9 +64,9 @@ bool motion_profile_generate_s_curve(float start_pos,
                                      int *num_points);
 
 /**
- * @brief Free the memory allocated for a trajectory.
+ * @brief Frees the memory allocated for a trajectory.
  *
- * @param trajectory Pointer to the trajectory array allocated by motion_profile_generate_s_curve().
+ * @param trajectory Pointer to the trajectory array to be freed.
  */
 void motion_profile_free_trajectory(motion_profile_point_t *trajectory);
 

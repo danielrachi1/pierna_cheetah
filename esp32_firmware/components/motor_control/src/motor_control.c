@@ -233,7 +233,7 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         target_position_rad,
         0.0f,      // end vel
         user_rads, // speed limit
-        MP_DEFAULT_MAX_ACC,
+        user_rads*2, // acceleration limit, reach speed limit in half a second
         MP_DEFAULT_MAX_JERK,
         MP_TIME_STEP,
         &state->trajectory,

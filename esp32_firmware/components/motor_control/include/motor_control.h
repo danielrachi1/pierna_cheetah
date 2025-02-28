@@ -113,12 +113,12 @@ esp_err_t motor_control_handle_command(const motor_command_t *command);
 esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, int timeout_ticks);
 
 /* Gain definitions */
-#define KP1 10
-#define KD1 0.1
-#define KP2 10
-#define KD2 0.1
-#define KP3 10
-#define KD3 0.1
+#define KP1 15
+#define KD1 3
+#define KP2 0
+#define KD2 0
+#define KP3 0
+#define KD3 0
 
 /* Motion limits for each motor (in degrees) */
 #define MOTOR1_MIN_ANGLE_DEG 0.0f
@@ -132,7 +132,7 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
  * @brief Maximum speed (degrees/s) for each motor at 100% speed setting.
  * You may customize these values.
  */
-#define MOTOR1_MAX_SPEED_DPS 180.0f
+#define MOTOR1_MAX_SPEED_DPS 360.0f
 #define MOTOR2_MAX_SPEED_DPS 360.0f
 #define MOTOR3_MAX_SPEED_DPS 90.0f
 
