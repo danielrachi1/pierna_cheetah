@@ -113,8 +113,8 @@ esp_err_t motor_control_handle_command(const motor_command_t *command);
 esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, int timeout_ticks);
 
 /* Gain definitions */
-#define KP1 15
-#define KD1 3
+#define KP1 10
+#define KD1 1
 #define KP2 0
 #define KD2 0
 #define KP3 0
