@@ -115,8 +115,8 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
 /* Gain definitions */
 #define KP1 10
 #define KD1 1
-#define KP2 0
-#define KD2 0
+#define KP2 6
+#define KD2 1
 #define KP3 0
 #define KD3 0
 
