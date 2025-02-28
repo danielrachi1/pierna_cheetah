@@ -526,7 +526,7 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
         .position = target_position_rad,
-        .speed_percentage = 10.0f // default 10% speed
+        .speed_percentage = 50.0f // default 50% speed
     };
     esp_err_t err = motor_control_handle_command(&cmd);
     if (err != ESP_OK)
