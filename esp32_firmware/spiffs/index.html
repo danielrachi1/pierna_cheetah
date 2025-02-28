@@ -10,43 +10,65 @@
 </head>
 
 <body>
-    <h1>ESP32 Robot Controller</h1>
-    <div id="notification" class="hidden"></div>
+    <header>
+        <h1>ESP32 Robot Controller</h1>
+    </header>
 
-    <!-- OFF VIEW -->
-    <section id="robot-off">
+    <!-- Recovery View: Shown when system is in full lockdown -->
+    <section id="robot-recovery" class="hidden recovery">
+        <h2>Recovery Required</h2>
+        <p>
+            The system is in lockdown because an improper shutdown was detected.
+            <br>
+            Please <strong>physically power off each motor</strong> using its switch or emergency stop,
+            <br>
+            <strong>manually move all motors to the home position</strong> (0°),
+            <br>
+            and then power them on again.
+            <br>
+            Once done, click the "Clear Recovery" button below.
+        </p>
+        <button class="btn" onclick="clearRecovery()">Clear Recovery</button>
+    </section>
+
+    <!-- Robot Off View -->
+    <section id="robot-off" class="hidden">
         <h2>Robot is Off</h2>
-        <p>Please manually place the motors at the home position (0°). Then press Turn On.</p>
+        <p>
+            Please manually place the motors at the home position (0°) if needed,
+            then press "Turn On" to activate the robot.
+        </p>
         <div class="image-container">
             <img src="home_position.png" alt="Home Position Diagram" class="center-image">
         </div>
         <button class="btn" onclick="turnRobotOn()">Turn On</button>
     </section>
 
-    <!-- ON VIEW -->
+    <!-- Robot On View -->
     <section id="robot-on" class="hidden">
         <h2>Robot is On</h2>
-        <div>
-            <label for="motor_id">Motor ID</label>
+        <div class="controls">
+            <label for="motor_id">Motor ID:</label>
             <select id="motor_id">
                 <option value="1">Motor 1</option>
                 <option value="2">Motor 2</option>
                 <option value="3">Motor 3</option>
             </select>
         </div>
-        <div>
-            <label for="position_deg">Angle (degrees)</label>
+        <div class="controls">
+            <label for="position_deg">Angle (degrees):</label>
             <input type="number" id="position_deg" min="-180" max="360" step="0.1" value="0">
         </div>
-        <div>
-            <label for="speed">Speed (0-100)</label>
-            <!-- A simple range slider from 0..100. Default 10. -->
-            <input type="range" id="speed" min="0" max="100" step="1" value="10" />
+        <div class="controls">
+            <label for="speed">Speed (0-100):</label>
+            <input type="range" id="speed" min="0" max="100" step="1" value="10">
         </div>
         <button class="btn" onclick="sendPositionCommand()">Send Position</button>
         <hr>
         <button class="btn" onclick="turnRobotOff()">Turn Off</button>
     </section>
+
+    <div id="notification" class="hidden"></div>
 </body>
 
 </html>
