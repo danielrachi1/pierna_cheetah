@@ -52,8 +52,8 @@ void app_main(void)
     // If leftover motors were engaged, force shutdown now
     if (robot_controller_get_motors_engaged_flag())
     {
-        ESP_LOGW(LOG_TAG, "Detected leftover engaged motors; forcing shutdown now...");
-        robot_controller_turn_off();
+        ESP_LOGW(LOG_TAG, "Detected leftover engaged motors. Entering recovery mode.");
+        robot_controller_set_recovery_needed(true);
     }
 
     // Start Wi-Fi and mDNS
