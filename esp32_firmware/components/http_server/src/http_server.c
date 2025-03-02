@@ -258,7 +258,7 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing or invalid 'position'\"}");
         return ESP_FAIL;
     }
-    float deg = (float)pos_item->valuedouble;
+    float pos_deg = (float)pos_item->valuedouble;
     cJSON *speed_item = cJSON_GetObjectItem(root, "speed");
     if (!cJSON_IsNumber(speed_item))
     {
@@ -266,18 +266,46 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing or invalid 'speed'\"}");
         return ESP_FAIL;
     }
-    float speed_percentage = (float)speed_item->valuedouble;
-    if (speed_percentage < 1.0f)
-        speed_percentage = 1.0f;
-    if (speed_percentage > 100.0f)
-        speed_percentage = 100.0f;
+    float speed_deg = (float)speed_item->valuedouble;
+    if (speed_deg <= 0)
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Speed must be a positive number (deg/s)\"}");
+        return ESP_FAIL;
+    }
+
+    // Validate that the provided speed does not exceed the motor's maximum allowed speed (in deg/s).
+    float max_speed = 0.0f;
+    if (motor_id == 1)
+        max_speed = MOTOR1_MAX_SPEED_DPS;
+    else if (motor_id == 2)
+        max_speed = MOTOR2_MAX_SPEED_DPS;
+    else if (motor_id == 3)
+        max_speed = MOTOR3_MAX_SPEED_DPS;
+    else
+    {
+        cJSON_Delete(root);
+        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Invalid motor_id\"}");
+        return ESP_FAIL;
+    }
+    if (speed_deg > max_speed)
+    {
+        cJSON_Delete(root);
+        char error_msg[128];
+        snprintf(error_msg, sizeof(error_msg),
+                 "{\"status\":\"error\",\"message\":\"Speed exceeds maximum allowed (%.2f deg/s)\"}", max_speed);
+        httpd_resp_sendstr(req, error_msg);
+        return ESP_FAIL;
+    }
     cJSON_Delete(root);
 
+    // Convert user-provided degrees into radians.
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
-        .position = deg * (M_PI / 180.0f),
-        .speed_percentage = speed_percentage};
+        .position = pos_deg * (M_PI / 180.0f),
+        .speed = speed_deg * (M_PI / 180.0f) // convert deg/s to rad/s
+    };
 
     esp_err_t err = motor_control_handle_command(&cmd);
     if (err == ESP_OK)
@@ -394,7 +422,6 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
             httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Unsupported command type in batch\"}");
             return ESP_FAIL;
         }
-        // You may add additional range checks here if desired.
         counts[motor_id - 1]++;
     }
 
@@ -426,13 +453,43 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         // Convert position from degrees to radians.
         float position_deg = (float)cJSON_GetObjectItem(cmd_item, "position")->valuedouble;
         float position_rad = position_deg * (M_PI / 180.0f);
-        float speed = (float)cJSON_GetObjectItem(cmd_item, "speed")->valuedouble;
+        // Process speed: convert from deg/s to rad/s.
+        float speed_deg = (float)cJSON_GetObjectItem(cmd_item, "speed")->valuedouble;
+        if (speed_deg <= 0)
+        {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Speed must be positive in batch\"}");
+            return ESP_FAIL;
+        }
+        float max_speed = 0.0f;
+        if (motor_id == 1)
+            max_speed = MOTOR1_MAX_SPEED_DPS;
+        else if (motor_id == 2)
+            max_speed = MOTOR2_MAX_SPEED_DPS;
+        else if (motor_id == 3)
+            max_speed = MOTOR3_MAX_SPEED_DPS;
+        else
+        {
+            cJSON_Delete(root);
+            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid motor_id in batch\"}");
+            return ESP_FAIL;
+        }
+        if (speed_deg > max_speed)
+        {
+            cJSON_Delete(root);
+            char error_msg[128];
+            snprintf(error_msg, sizeof(error_msg),
+                     "{\"global_status\":\"error\",\"message\":\"Speed in batch exceeds maximum allowed (%.2f deg/s)\"}", max_speed);
+            httpd_resp_sendstr(req, error_msg);
+            return ESP_FAIL;
+        }
+        float speed_rad = speed_deg * (M_PI / 180.0f);
 
         motor_command_t command = {
             .motor_id = motor_id,
             .cmd_type = MOTOR_CMD_MOVE,
             .position = position_rad,
-            .speed_percentage = speed};
+            .speed = speed_rad};
         motor_state_t *state = motor_control_get_state(motor_id);
         state->batch_commands[indices[motor_id - 1]++] = command;
     }
@@ -499,7 +556,6 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         else
         {
             cJSON_AddStringToObject(mobj, "status", "ok");
-            // If no batch was loaded for this motor, commands_executed is 0.
             cJSON_AddNumberToObject(mobj, "commands_executed", state->batch_index);
         }
         cJSON_AddItemToArray(motors_arr, mobj);

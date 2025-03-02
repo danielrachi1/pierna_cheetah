@@ -24,15 +24,14 @@ typedef enum
 /**
  * @brief Structure that holds one motor command.
  *
- * For MOTOR_CMD_MOVE, the position field (in radians) is used.
- * For other commands, position is ignored.
+ * For MOTOR_CMD_MOVE, the position and speed fields are in radians and radians per second, respectively.
  */
 typedef struct
 {
     int motor_id;                  ///< Motor identifier (1-based)
     motor_command_type_t cmd_type; ///< Type of command
-    float position;                ///< Used only if cmd_type == MOTOR_CMD_MOVE, in radians
-    float speed_percentage;        ///< Speed setting 0..100 for MOTOR_CMD_MOVE
+    float position;                ///< Target position in radians
+    float speed;                   ///< Target speed in radians per second (rad/s)
 } motor_command_t;
 
 /**
@@ -129,8 +128,7 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
 #define MOTOR3_MAX_ANGLE_DEG 135.0f
 
 /**
- * @brief Maximum speed (degrees/s) for each motor at 100% speed setting.
- * You may customize these values.
+ * @brief Maximum speed (degrees/s) for each motor.
  */
 #define MOTOR1_MAX_SPEED_DPS 360.0f
 #define MOTOR2_MAX_SPEED_DPS 360.0f

@@ -137,21 +137,6 @@ esp_err_t motor_control_sync_position(int motor_id)
     }
 }
 
-static float get_motor_max_speed_dps(int motor_id)
-{
-    switch (motor_id)
-    {
-    case 1:
-        return MOTOR1_MAX_SPEED_DPS;
-    case 2:
-        return MOTOR2_MAX_SPEED_DPS;
-    case 3:
-        return MOTOR3_MAX_SPEED_DPS;
-    default:
-        return 180.0f; // fallback
-    }
-}
-
 static esp_err_t check_angle_range(int motor_id, float angle_deg)
 {
     switch (motor_id)
@@ -178,7 +163,7 @@ out_of_range:
     return ESP_ERR_INVALID_ARG;
 }
 
-static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad, float speed_percentage)
+static esp_err_t handle_move_command(motor_state_t *state, float target_position_rad, float speed)
 {
     if (!state->engaged)
     {
@@ -208,10 +193,9 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
         return err;
     }
 
-    // 3) Compute max velocity in rad/s
-    float motor_dps = get_motor_max_speed_dps(state->motor_id);
-    float user_dps = (speed_percentage / 100.0f) * motor_dps;
-    float user_rads = user_dps * (M_PI / 180.0f);
+    // 3) Speed is already in rad/s. No conversion is needed.
+    ESP_LOGI(LOG_TAG, "Motor %d: Generating trajectory from %.4f rad to %.4f rad, speed=%.4f rad/s",
+             state->motor_id, state->current_position, target_position_rad, speed);
 
     // 4) Clear old trajectory if any
     if (state->trajectory)
@@ -223,17 +207,14 @@ static esp_err_t handle_move_command(motor_state_t *state, float target_position
     state->trajectory_index = 0;
     state->trajectory_active = false;
 
-    // 5) Generate S-curve
-    ESP_LOGI(LOG_TAG, "Motor %d: Generating trajectory from %.4f rad to %.4f rad, max_vel=%.4f rad/s (%.0f%%)",
-             state->motor_id, state->current_position, target_position_rad, user_rads, speed_percentage);
-
+    // 5) Generate S-curve using the provided speed (rad/s)
     bool success = motion_profile_generate_s_curve(
         state->current_position,
-        0.0f, // start vel
+        0.0f, // start velocity
         target_position_rad,
-        0.0f,      // end vel
-        user_rads, // speed limit
-        user_rads*2, // acceleration limit, reach speed limit in half a second
+        0.0f,      // end velocity
+        speed,     // speed limit in rad/s
+        speed * 2, // acceleration limit: reach speed in half a second
         MP_DEFAULT_MAX_JERK,
         MP_TIME_STEP,
         &state->trajectory,
@@ -342,7 +323,7 @@ esp_err_t motor_control_handle_command(const motor_command_t *command)
         return handle_zero_sensor(state);
 
     case MOTOR_CMD_MOVE:
-        return handle_move_command(state, command->position, command->speed_percentage);
+        return handle_move_command(state, command->position, command->speed);
 
     default:
         ESP_LOGE(LOG_TAG, "Invalid command type for motor %d", command->motor_id);
@@ -522,12 +503,12 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
         return ESP_ERR_INVALID_ARG;
     }
 
+    // 180 deg/s converted to rad/s = 180 * (M_PI/180) = M_PI rad/s
     motor_command_t cmd = {
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
         .position = target_position_rad,
-        .speed_percentage = 50.0f // default 50% speed
-    };
+        .speed = M_PI};
     esp_err_t err = motor_control_handle_command(&cmd);
     if (err != ESP_OK)
     {
@@ -537,18 +518,14 @@ esp_err_t motor_control_move_blocking(int motor_id, float target_position_rad, i
     TickType_t start = xTaskGetTickCount();
     while (1)
     {
-        // If robot is off mid-move, abort
         if (!robot_controller_is_engaged())
         {
             return ESP_ERR_INVALID_STATE;
         }
-
-        // If trajectory is finished
         if (!state->trajectory_active)
         {
             return ESP_OK;
         }
-
         if ((xTaskGetTickCount() - start) > timeout_ticks)
         {
             ESP_LOGW(LOG_TAG, "motor_control_move_blocking: Motor %d timed out waiting for trajectory finish.", motor_id);
