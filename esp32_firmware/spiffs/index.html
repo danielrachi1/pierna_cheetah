@@ -47,25 +47,32 @@
     <!-- Robot On View -->
     <section id="robot-on" class="hidden">
         <h2>Robot is On</h2>
-        <div class="controls">
-            <label for="motor_id">Motor ID:</label>
-            <select id="motor_id">
-                <option value="1">Motor 1</option>
-                <option value="2">Motor 2</option>
-                <option value="3">Motor 3</option>
-            </select>
+        <div class="form-container">
+            <form id="positionForm" onsubmit="event.preventDefault(); sendPositionCommand();">
+                <div class="controls">
+                    <label for="motor_id">Motor:</label>
+                    <select id="motor_id" name="motor_id">
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                        <option value="3">3</option>
+                    </select>
+                </div>
+                <div class="controls">
+                    <label for="position_deg">Angle (°):</label>
+                    <input type="number" id="position_deg" name="position_deg" step="1" value="0">
+                </div>
+                <div class="controls">
+                    <label for="speed">Speed (%):</label>
+                    <input type="number" id="speed" name="speed" min="0" max="100" step="1" value="10">
+                </div>
+                <div class="controls">
+                    <button type="submit" class="btn">Send</button>
+                </div>
+            </form>
         </div>
-        <div class="controls">
-            <label for="position_deg">Angle (degrees):</label>
-            <input type="number" id="position_deg" min="-180" max="360" step="0.1" value="0">
+        <div class="off-container">
+            <button type="button" class="btn" onclick="turnRobotOff()">Power Off</button>
         </div>
-        <div class="controls">
-            <label for="speed">Speed (0-100):</label>
-            <input type="range" id="speed" min="0" max="100" step="1" value="10">
-        </div>
-        <button class="btn" onclick="sendPositionCommand()">Send Position</button>
-        <hr>
-        <button class="btn" onclick="turnRobotOff()">Turn Off</button>
     </section>
 
     <div id="notification" class="hidden"></div>

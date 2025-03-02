@@ -2,7 +2,7 @@
 function showNotification(message, type) {
     var notification = document.getElementById('notification');
     notification.textContent = message;
-    notification.className = '';
+    notification.className = ''; // Reset classes
     notification.classList.add(type === 'error' ? 'error' : 'success', 'show');
     setTimeout(function () {
         notification.classList.remove('show');
@@ -28,7 +28,7 @@ function showRecoveryView() {
     document.getElementById('robot-recovery').classList.remove('hidden');
 }
 
-// API call helpers
+// API call helper function
 async function apiPost(url, payload = {}) {
     try {
         const response = await fetch(url, {
@@ -114,7 +114,7 @@ async function clearRecovery() {
         const resp = await apiPost('/api/recovery/clear');
         if (resp.status === 'ok') {
             showNotification(resp.message, 'success');
-            // After recovery is cleared, show off view so the user can then turn on the robot.
+            // After recovery is cleared, show Off view so the user can then turn on the robot.
             showOffView();
         } else {
             showNotification(resp.message, 'error');
