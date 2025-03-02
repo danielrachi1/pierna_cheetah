@@ -65,7 +65,7 @@ section {
 }
 
 .controls label {
-    width: 100px;
+    width: 25%;
     margin-right: 10px;
     flex-shrink: 0;
 }
