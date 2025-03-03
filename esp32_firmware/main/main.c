@@ -7,7 +7,8 @@
 #include "wifi_manager.h"
 #include "can_bus.h"
 #include "http_server.h"
-#include "motor_control.h"
+#include "motor_control_core.h"
+#include "motor_control_task.h"
 #include "driver/gpio.h"
 #include "robot_controller.h"
 

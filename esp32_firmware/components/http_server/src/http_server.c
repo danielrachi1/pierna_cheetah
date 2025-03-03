@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "motor_control.h"
+#include "motor_control_core.h"
+#include "motor_command_handlers.h"
 #include "robot_controller.h"
 
 #define TAG "HTTP_SERVER"
