@@ -182,15 +182,14 @@ static esp_err_t api_recovery_clear_handler(httpd_req_t *req)
 }
 
 /*
- * POST /api/command
+ * POST /api/command/move
  * JSON body: {
  *   "motor_id": 1|2|3,
- *   "speed": 1..100,
- *   "command": "go_to_position",
  *   "position": <degrees>
+ *   "speed": 1..100,
  * }
  */
-static esp_err_t api_command_post_handler(httpd_req_t *req)
+static esp_err_t api_command_move_handler(httpd_req_t *req)
 {
     int total_len = req->content_len;
     int cur_len = 0;
@@ -231,7 +230,6 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
     cJSON *motor_id_item = cJSON_GetObjectItem(root, "motor_id");
-    cJSON *command_item = cJSON_GetObjectItem(root, "command");
     if (!cJSON_IsNumber(motor_id_item) || !cJSON_IsString(command_item))
     {
         cJSON_Delete(root);
@@ -240,12 +238,6 @@ static esp_err_t api_command_post_handler(httpd_req_t *req)
     }
     int motor_id = motor_id_item->valueint;
     const char *cmd_str = command_item->valuestring;
-    if (strcmp(cmd_str, "go_to_position") != 0)
-    {
-        cJSON_Delete(root);
-        httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Unknown or disallowed command\"}");
-        return ESP_FAIL;
-    }
     if (!robot_controller_is_engaged())
     {
         cJSON_Delete(root);
@@ -399,7 +391,6 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         if (!cmd_item)
             continue;
         cJSON *motor_id_item = cJSON_GetObjectItem(cmd_item, "motor_id");
-        cJSON *command_item = cJSON_GetObjectItem(cmd_item, "command");
         cJSON *position_item = cJSON_GetObjectItem(cmd_item, "position");
         cJSON *speed_item = cJSON_GetObjectItem(cmd_item, "speed");
         if (!cJSON_IsNumber(motor_id_item) || !cJSON_IsString(command_item) ||
@@ -414,13 +405,6 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         {
             cJSON_Delete(root);
             httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid motor_id in batch\"}");
-            return ESP_FAIL;
-        }
-        // Only allow "go_to_position" commands.
-        if (strcmp(command_item->valuestring, "go_to_position") != 0)
-        {
-            cJSON_Delete(root);
-            httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Unsupported command type in batch\"}");
             return ESP_FAIL;
         }
         counts[motor_id - 1]++;
@@ -589,7 +573,7 @@ static httpd_uri_t uri_root = {
     .user_ctx = NULL};
 
 static httpd_uri_t uri_api_command = {
-    .uri = "/api/command",
+    .uri = "/api/command/move",
     .method = HTTP_POST,
     .handler = api_command_post_handler,
     .user_ctx = NULL};

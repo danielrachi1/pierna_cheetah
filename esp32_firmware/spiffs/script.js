@@ -88,13 +88,12 @@ async function sendPositionCommand() {
 
     const payload = {
         motor_id: motorId,
-        speed: speed,
-        command: "go_to_position",
-        position: deg
+        position: deg,
+        speed: speed
     };
 
     try {
-        const resp = await apiPost('/api/command', payload);
+        const resp = await apiPost('/api/command/move', payload);
         if (resp.status === 'ok') {
             showNotification(resp.message, 'success');
         } else if (resp.status === 'error' && resp.message.includes("Recovery needed")) {
