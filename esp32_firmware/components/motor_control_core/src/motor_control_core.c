@@ -20,8 +20,8 @@ static bool s_batch_in_progress = false;         ///< Tracks if a global batch i
 // -------------------------------------------------------------------
 bool s_inverted[NUM_MOTORS] = {
     true,
-    false,
-    false};
+    true,
+    true};
 
 float to_user_angle(int motor_id, float hardware_angle)
 {
