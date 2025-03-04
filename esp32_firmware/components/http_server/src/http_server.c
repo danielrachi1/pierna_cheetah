@@ -393,7 +393,7 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         cJSON *position_item = cJSON_GetObjectItem(cmd_item, "position");
         cJSON *speed_item = cJSON_GetObjectItem(cmd_item, "speed");
         if (!cJSON_IsNumber(motor_id_item) ||
-            !cJSON_IsNumber(position_item) || 
+            !cJSON_IsNumber(position_item) ||
             !cJSON_IsNumber(speed_item))
         {
             cJSON_Delete(root);
@@ -483,32 +483,38 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
     // Mark global batch in progress.
     motor_control_set_batch_in_progress(true);
 
-    // Wait (polling) until all motors have finished processing their batches or an error occurs.
-    const int max_wait_ticks = 10000; // e.g., 10 seconds timeout
-    int waited = 0;
+    // Infinite wait until either all commands finish or one motor sets batch_error.
     const int poll_delay_ms = 100;
     bool abort_occurred = false;
-    while (waited < max_wait_ticks)
+
+    while (true) // or while (1)
     {
         abort_occurred = false;
         bool all_done = true;
+
         for (int i = 0; i < NUM_MOTORS; i++)
         {
             motor_state_t *state = motor_control_get_state(i + 1);
-            if (state->batch_commands != NULL)
+
+            // If any motor still has commands left, we are not done
+            if (state && state->batch_commands != NULL)
             {
                 all_done = false;
             }
-            if (state->batch_error)
+
+            // If any motor encountered an error, abort
+            if (state && state->batch_error)
             {
                 abort_occurred = true;
             }
         }
+
         if (all_done || abort_occurred)
             break;
+
         vTaskDelay(pdMS_TO_TICKS(poll_delay_ms));
-        waited += poll_delay_ms;
     }
+
     motor_control_set_batch_in_progress(false);
 
     // Build response JSON
