@@ -26,16 +26,16 @@
 #define MOTOR1_MIN_ANGLE_DEG 0.0f
 #define MOTOR1_MAX_ANGLE_DEG 180.0f
 #define MOTOR2_MIN_ANGLE_DEG -180.0f
-#define MOTOR2_MAX_ANGLE_DEG 180.0f
+#define MOTOR2_MAX_ANGLE_DEG 0.0f
 #define MOTOR3_MIN_ANGLE_DEG -135.0f
 #define MOTOR3_MAX_ANGLE_DEG 135.0f
 
 /**
  * @brief Maximum speed (degrees/s) for each motor.
  */
-#define MOTOR1_MAX_SPEED_DPS 360.0f
-#define MOTOR2_MAX_SPEED_DPS 360.0f
-#define MOTOR3_MAX_SPEED_DPS 360.0f
+#define MOTOR1_MAX_SPEED_DPS 720.0f
+#define MOTOR2_MAX_SPEED_DPS 720.0f
+#define MOTOR3_MAX_SPEED_DPS 720.0f
 
 /**
  * @brief Some motors are inverted in hardware.
