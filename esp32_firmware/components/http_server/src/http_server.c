@@ -230,14 +230,13 @@ static esp_err_t api_command_move_handler(httpd_req_t *req)
         return ESP_FAIL;
     }
     cJSON *motor_id_item = cJSON_GetObjectItem(root, "motor_id");
-    if (!cJSON_IsNumber(motor_id_item) || !cJSON_IsString(command_item))
+    if (!cJSON_IsNumber(motor_id_item))
     {
         cJSON_Delete(root);
         httpd_resp_sendstr(req, "{\"status\":\"error\",\"message\":\"Missing 'motor_id' or 'command'\"}");
         return ESP_FAIL;
     }
     int motor_id = motor_id_item->valueint;
-    const char *cmd_str = command_item->valuestring;
     if (!robot_controller_is_engaged())
     {
         cJSON_Delete(root);
@@ -393,8 +392,9 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
         cJSON *motor_id_item = cJSON_GetObjectItem(cmd_item, "motor_id");
         cJSON *position_item = cJSON_GetObjectItem(cmd_item, "position");
         cJSON *speed_item = cJSON_GetObjectItem(cmd_item, "speed");
-        if (!cJSON_IsNumber(motor_id_item) || !cJSON_IsString(command_item) ||
-            !cJSON_IsNumber(position_item) || !cJSON_IsNumber(speed_item))
+        if (!cJSON_IsNumber(motor_id_item) ||
+            !cJSON_IsNumber(position_item) || 
+            !cJSON_IsNumber(speed_item))
         {
             cJSON_Delete(root);
             httpd_resp_sendstr(req, "{\"global_status\":\"error\",\"message\":\"Invalid command format in batch\"}");
@@ -575,7 +575,7 @@ static httpd_uri_t uri_root = {
 static httpd_uri_t uri_api_command = {
     .uri = "/api/command/move",
     .method = HTTP_POST,
-    .handler = api_command_post_handler,
+    .handler = api_command_move_handler,
     .user_ctx = NULL};
 
 static httpd_uri_t uri_robot_on = {
