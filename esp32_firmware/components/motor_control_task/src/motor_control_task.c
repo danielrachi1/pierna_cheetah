@@ -45,15 +45,23 @@ static void global_batch_abort(void)
  */
 static void process_motor_trajectory(motor_state_t *state)
 {
-    if (!state->trajectory_active || (state->trajectory_index >= state->trajectory_points))
+    // If this motor does not have an active trajectory, nothing to do.
+    if (!state->trajectory_active)
     {
-        return; // No active trajectory to process
+        return;
     }
 
-    // Grab next setpoint
+    // If the trajectory is active but we've already consumed all points,
+    // then we’re done—(this check may or may not be strictly needed).
+    if (state->trajectory_index >= state->trajectory_points)
+    {
+        return;
+    }
+
+    // Grab the next trajectory setpoint
     motion_profile_point_t *pt = &state->trajectory[state->trajectory_index];
 
-    // We retrieve the motor-specific gains
+    // Retrieve motor gains
     float kp = 0.0f;
     float kd = 0.0f;
     switch (state->motor_id)
@@ -71,45 +79,44 @@ static void process_motor_trajectory(motor_state_t *state)
         kd = KD3;
         break;
     default:
-        break;
+        break; // Should never happen
     }
 
-    // The hardware expects angles in "hardware space" (account for s_inverted).
+    // Convert user-space angles to hardware angles
     float hw_pos = from_user_angle(state->motor_id, pt->position);
     float hw_vel = from_user_angle(state->motor_id, pt->velocity);
 
+    // Build the CAN message
     uint8_t can_msg_data[8];
     memset(can_msg_data, 0, sizeof(can_msg_data));
     pack_cmd(hw_pos, hw_vel, kp, kd, 0.0f, can_msg_data);
 
+    // Transmit & wait for the motor’s response
     twai_message_t response;
     esp_err_t err = can_bus_request_response(can_msg_data, 8, state->motor_id, &response);
     if (err != ESP_OK)
     {
-        // Increment the failure counter
+        // Record the failure
         int idx = state->motor_id - 1;
         s_motor_failure_count[idx]++;
         ESP_LOGE(TAG, "Motor %d: CAN TX/RX failed. Consecutive errors=%d",
                  state->motor_id, s_motor_failure_count[idx]);
-
+        // After too many failures, force a global shutdown + batch abort
         if (s_motor_failure_count[idx] >= 3)
         {
-            // Too many consecutive failures, force global shutdown
             robot_controller_handle_motor_error(state->motor_id);
             global_batch_abort();
         }
-        return; // skip the rest of the logic on this iteration
+        return;
     }
 
-    // If we get here, we had a successful exchange:
-    int idx = state->motor_id - 1;
-    s_motor_failure_count[idx] = 0; // reset on success
+    // On success, reset this motor’s failure counter
+    s_motor_failure_count[state->motor_id - 1] = 0;
 
+    // If we got a 6-byte reply, parse the feedback to update state->current_position
     if (response.data_length_code == 6)
     {
-        // parse the new position feedback
-        motor_reply_t reply;
-        memset(&reply, 0, sizeof(reply));
+        motor_reply_t reply = {0};
         unpack_reply(response.data, &reply);
 
         float user_angle = to_user_angle(state->motor_id, reply.position);
@@ -121,11 +128,11 @@ static void process_motor_trajectory(motor_state_t *state)
                  reply.position, reply.velocity, user_angle, reply.current);
     }
 
-    // Increment trajectory index
+    // Advance to the next point in the trajectory
     state->trajectory_index++;
     if (state->trajectory_index >= state->trajectory_points)
     {
-        // Trajectory completed
+        // We have reached the final point
         state->trajectory_active = false;
         if (state->trajectory)
         {
@@ -133,6 +140,20 @@ static void process_motor_trajectory(motor_state_t *state)
             state->trajectory = NULL;
         }
         ESP_LOGI(TAG, "Motor %d: Trajectory finished.", state->motor_id);
+
+        // If we’re currently processing a batch MOVE command, *now* it's fully done
+        if (state->batch_commands)
+        {
+            state->batch_index++;
+            if (state->batch_index >= state->batch_count)
+            {
+                free(state->batch_commands);
+                state->batch_commands = NULL;
+                state->batch_count = 0;
+                state->batch_index = 0;
+                ESP_LOGI(TAG, "Motor %d: Finished all batch commands.", state->motor_id);
+            }
+        }
     }
 }
 
@@ -142,43 +163,51 @@ static void process_motor_trajectory(motor_state_t *state)
  */
 static void process_motor_batch(motor_state_t *state)
 {
+    // If this motor is currently executing a trajectory, do nothing;
+    // we'll only advance to the next command once that trajectory finishes.
     if (state->trajectory_active)
     {
-        return; // motor is busy executing a trajectory
-    }
-    if (!state->batch_commands || (state->batch_index >= state->batch_count))
-    {
-        return; // no more commands
+        return;
     }
 
+    // If there is no active batch array or we've already used them all, nothing to do.
+    if (!state->batch_commands || (state->batch_index >= state->batch_count))
+    {
+        return;
+    }
+
+    // We have a pending command for this motor.
+    motor_command_t *cmd = &state->batch_commands[state->batch_index];
     ESP_LOGI(TAG, "Motor %d: Processing batch command %d/%d",
              state->motor_id, state->batch_index + 1, state->batch_count);
 
-    esp_err_t err = motor_control_handle_command(&state->batch_commands[state->batch_index]);
-    if (err == ESP_OK)
+    // Execute the command (which may start a trajectory if it's a MOVE).
+    esp_err_t err = motor_control_handle_command(cmd);
+    if (err != ESP_OK)
     {
-        state->batch_index++;
-        // If that was a move command, it may have started a trajectory...
-    }
-    else
-    {
-        // Mark local error
+        // Mark this motor’s batch as failed
         state->batch_error = true;
         snprintf(state->batch_error_message, sizeof(state->batch_error_message),
                  "Command %d failed: %s",
                  state->batch_index, esp_err_to_name(err));
+        // Trigger a global abort so the /api/command/batch endpoint can return an error
         global_batch_abort();
         return;
     }
 
-    // If we finished all commands, release the memory
-    if (state->batch_index >= state->batch_count)
+    // If the command was *not* a MOVE, it completes immediately—so increment now.
+    // (For MOVE, we wait until the trajectory actually ends in process_motor_trajectory().)
+    if (cmd->cmd_type != MOTOR_CMD_MOVE)
     {
-        free(state->batch_commands);
-        state->batch_commands = NULL;
-        state->batch_count = 0;
-        state->batch_index = 0;
-        ESP_LOGI(TAG, "Motor %d: Finished all batch commands.", state->motor_id);
+        state->batch_index++;
+        if (state->batch_index >= state->batch_count)
+        {
+            free(state->batch_commands);
+            state->batch_commands = NULL;
+            state->batch_count = 0;
+            state->batch_index = 0;
+            ESP_LOGI(TAG, "Motor %d: Finished all batch commands.", state->motor_id);
+        }
     }
 }
 
