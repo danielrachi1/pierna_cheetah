@@ -181,8 +181,9 @@ esp_err_t robot_controller_turn_off(void)
     // Even if s_robot_engaged is false, we continue with cleanup.
     if (s_robot_engaged)
     {
-        // 1) Move all motors to home (0.0)
-        for (int i = 1; i <= NUM_MOTORS; i++)
+        // 1) Move all motors to home (0.0). Done in reverse (3 to 1) because the other way is more
+        // likely to cause collisions.
+        for (int i = 3; i >= 1; i--)
         {
             esp_err_t err = motor_control_move_blocking(i, 0.0f, pdMS_TO_TICKS(5000));
             if (err != ESP_OK)
