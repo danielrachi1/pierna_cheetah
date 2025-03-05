@@ -13,12 +13,12 @@
 /**
  * @brief Gains for each motor
  */
-#define KP1 12
-#define KD1 1
-#define KP2 8
-#define KD2 1
-#define KP3 25
-#define KD3 2.1
+#define KP1 30
+#define KD1 1.5
+#define KP2 25
+#define KD2 1.5
+#define KP3 20
+#define KD3 2
 
 /**
  * Motion limits for each motor (in degrees)
