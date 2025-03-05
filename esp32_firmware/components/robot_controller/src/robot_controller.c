@@ -168,8 +168,21 @@ esp_err_t robot_controller_turn_on(void)
         return ESP_FAIL;
     }
 
-    // 5) Mark robot as engaged
+    // 5) Mark robot as engaged (won't lock if we don't set this flag before the for loop)
     s_robot_engaged = true;
+
+    // 6) "Lock" motors on zero position
+    for (int i = 3; i >= 1; i--)
+    {
+        esp_err_t err = motor_control_move_blocking(i, 0.0f, pdMS_TO_TICKS(1000));
+        if (err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Motor %d failed to reach home (or timed out). Err: %s", i, esp_err_to_name(err));
+            robot_controller_turn_off();
+            return ESP_FAIL;
+        }
+    }
+
     ESP_LOGI(TAG, "Robot successfully turned on. Engaged = true");
     return ESP_OK;
 }
