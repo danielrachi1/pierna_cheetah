@@ -34,8 +34,8 @@
  * @brief Maximum speed (degrees/s) for each motor.
  */
 #define MOTOR1_MAX_SPEED_DPS 720.0f
-#define MOTOR2_MAX_SPEED_DPS 720.0f
-#define MOTOR3_MAX_SPEED_DPS 720.0f
+#define MOTOR2_MAX_SPEED_DPS 1440.0f
+#define MOTOR3_MAX_SPEED_DPS 1440.0f
 
 /**
  * @brief Some motors are inverted in hardware.

@@ -36,6 +36,11 @@ response_start = api_call('batch', payload_start);
 
 pause(2)
 
-response_step = api_call('batch', payload_batch);
+n_steps = 5;
+response_steps = [];
+for i= 1:n_steps
+    response_step = api_call('batch', payload_batch);
+    response_steps = [response_steps, response_step];
+end
 
 response_off = api_call('off', []);
