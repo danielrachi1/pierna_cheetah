@@ -8,9 +8,9 @@
 #include "nvs_flash.h"
 
 #include "can_bus.h"
-#include "motor_control_core.h"     // For motor_control_move_blocking
-#include "motor_command_handlers.h" // For motor_control_handle_command
-#include "driver/gpio.h"            // for relay control
+#include "motor_control_core.h"     
+#include "motor_command_handlers.h" 
+#include "driver/gpio.h"            
 
 static const char *TAG = "ROBOT_CONTROLLER";
 

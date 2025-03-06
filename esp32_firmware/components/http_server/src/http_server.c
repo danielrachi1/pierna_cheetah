@@ -89,9 +89,6 @@ static esp_err_t file_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-/**
- * @brief Utility: If recovery is needed, respond with a descriptive error.
- */
 static esp_err_t check_recovery_needed(httpd_req_t *req)
 {
     if (robot_controller_is_recovery_needed())
@@ -130,7 +127,7 @@ static esp_err_t api_robot_on_handler(httpd_req_t *req)
 /**
  * @brief POST /api/robot/off
  *
- * Turns the robot off. This endpoint is now also gated: if recovery is needed, it is rejected.
+ * Turns the robot off unless recovery is needed.
  */
 static esp_err_t api_robot_off_handler(httpd_req_t *req)
 {
@@ -186,7 +183,7 @@ static esp_err_t api_recovery_clear_handler(httpd_req_t *req)
  * JSON body: {
  *   "motor_id": 1|2|3,
  *   "position": <degrees>
- *   "speed": 1..100,
+ *   "speed": <degrees per second>,
  * }
  */
 static esp_err_t api_command_move_handler(httpd_req_t *req)
@@ -296,7 +293,7 @@ static esp_err_t api_command_move_handler(httpd_req_t *req)
         .motor_id = motor_id,
         .cmd_type = MOTOR_CMD_MOVE,
         .position = pos_deg * (M_PI / 180.0f),
-        .speed = speed_deg * (M_PI / 180.0f) // convert deg/s to rad/s
+        .speed = speed_deg * (M_PI / 180.0f)
     };
 
     esp_err_t err = motor_control_handle_command(&cmd);
@@ -487,7 +484,7 @@ static esp_err_t api_command_batch_handler(httpd_req_t *req)
     const int poll_delay_ms = 100;
     bool abort_occurred = false;
 
-    while (true) // or while (1)
+    while (true)
     {
         abort_occurred = false;
         bool all_done = true;

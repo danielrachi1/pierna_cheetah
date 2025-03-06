@@ -52,7 +52,7 @@ static void process_motor_trajectory(motor_state_t *state)
     }
 
     // If the trajectory is active but we've already consumed all points,
-    // then we’re done—(this check may or may not be strictly needed).
+    // then we’re done.
     if (state->trajectory_index >= state->trajectory_points)
     {
         return;
@@ -214,7 +214,7 @@ static void process_motor_batch(motor_state_t *state)
 void motor_control_task(void *arg)
 {
     ESP_LOGI(TAG, "Starting Motor Control Task...");
-    const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000)); // same as your motion profile step
+    const TickType_t delay_ticks = pdMS_TO_TICKS((int)(MP_TIME_STEP * 1000));
 
     while (1)
     {

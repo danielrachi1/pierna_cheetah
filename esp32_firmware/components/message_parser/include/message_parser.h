@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-/* Define ranges for position, velocity, etc. */
+/** 
+ * Define ranges for position, velocity, etc.
+ * This values are defined by the motor drive. should not
+ * be changed.
+ */ 
 #define P_MIN -95.5f  // Minimum position, radians
 #define P_MAX 95.5f   // Maximum position, radians
 #define V_MIN -45.0f  // Min velocity, rad/s

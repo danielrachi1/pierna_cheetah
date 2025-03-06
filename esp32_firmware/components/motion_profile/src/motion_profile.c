@@ -5,21 +5,6 @@
 
 #define LOG_TAG "MOTION_PROFILE"
 
-// For simplicity, this is a simplified S-curve generator. A full S-curve involves solving
-// multiple phases of motion (increasing acceleration, constant acceleration, decreasing acceleration,
-// etc.) with jerk-limited transitions. Here we implement a simplified version that may need
-// refinement for complex scenarios.
-
-// This example code splits the trajectory into three phases:
-// 1. Acceleration phase with limited jerk up to max_acc.
-// 2. Constant velocity phase (if needed).
-// 3. Deceleration phase with limited jerk down to end_vel.
-// For a full S-curve, jerk transitions (jerk ramp-ups and ramp-downs) are considered. Here we'll do a
-// simplified approach.
-//
-// NOTE: In a real system, you'd implement a more detailed s-curve planner. This code is a placeholder
-// providing a conceptual example and should be adapted for actual s-curve computations.
-
 bool motion_profile_generate_s_curve(float start_pos,
                                      float start_vel,
                                      float end_pos,
@@ -37,33 +22,15 @@ bool motion_profile_generate_s_curve(float start_pos,
         return false;
     }
 
-    // Simplified approach:
-    // 1. Compute total distance.
     float distance = end_pos - start_pos;
     int direction = (distance >= 0.0f) ? 1 : -1;
 
-    // For simplicity, ignore jerk in this minimal example and just produce a trapezoidal
-    // or pseudo-s curve by ramping acceleration linearly. A real s-curve involves more complex math.
-    // We'll just make a short jerk-based ramp: accelerate up, cruise, then decelerate.
-
-    // Let's define a simple profile:
-    // - Accelerate from start_vel to max_vel (if reachable) with max_acc.
-    // - Cruise at max_vel.
-    // - Decelerate to end_vel with max_acc.
-
-    // Check if we can reach max velocity within the given distance.
-    // A quick feasibility check:
     float accel_dist = (powf(max_vel, 2) - powf(start_vel, 2)) / (2.0f * max_acc);
     float decel_dist = (powf(max_vel, 2) - powf(end_vel, 2)) / (2.0f * max_acc);
     float cruise_dist = distance - (accel_dist + decel_dist);
 
     if (cruise_dist < 0.0f)
     {
-        // Can't reach max_vel. Adjust max_vel downward so we end up with a "triangle" profile.
-        // Solve for v_max given start_vel, end_vel, and distance:
-        // distance = (v_max² - start_vel²)/(2*max_acc) + (v_max² - end_vel²)/(2*max_acc)
-        // 2*distance*max_acc = 2*v_max² - start_vel² - end_vel²
-        // v_max² = distance*max_acc + (start_vel² + end_vel²)/2
         float new_vmax_sq = direction * distance * max_acc + (powf(start_vel, 2) + powf(end_vel, 2)) / 2.0f;
         if (new_vmax_sq < 0.0f)
             new_vmax_sq = 0.0f;
@@ -74,17 +41,14 @@ bool motion_profile_generate_s_curve(float start_pos,
         cruise_dist = 0.0f; // no cruising
     }
 
-    // Compute durations
     float accel_time = (max_vel - start_vel) / max_acc;
     float decel_time = (max_vel - end_vel) / max_acc;
     float cruise_time = (cruise_dist > 0.0f) ? (cruise_dist / max_vel) : 0.0f;
 
-    // Total time
     float total_time = accel_time + cruise_time + decel_time;
     *num_points = (int)(total_time / time_step) + 1;
     if (*num_points < 2)
     {
-        // If time steps are too large, fallback
         *num_points = 2;
     }
 
@@ -95,22 +59,18 @@ bool motion_profile_generate_s_curve(float start_pos,
         return false;
     }
 
-    // Generate trajectory
     float t = 0.0f;
     for (int i = 0; i < *num_points; i++)
     {
-        // Determine which phase we are in
         float pos, vel, acc;
         if (t <= accel_time)
         {
-            // Acceleration phase
             acc = max_acc * direction;
             vel = start_vel + acc * t;
             pos = start_pos + start_vel * t + 0.5f * acc * t * t;
         }
         else if (t <= (accel_time + cruise_time))
         {
-            // Cruise phase
             float t_cruise = t - accel_time;
             acc = 0.0f;
             vel = max_vel * direction;
@@ -118,7 +78,6 @@ bool motion_profile_generate_s_curve(float start_pos,
         }
         else
         {
-            // Deceleration phase
             float t_decel = t - accel_time - cruise_time;
             acc = -max_acc * direction;
             vel = max_vel * direction + acc * t_decel;
