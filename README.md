@@ -4,22 +4,15 @@
 
 ## Ejemplos de uso
 
-En el siguiente video, se pueden apreciar las funcionalidades principales del robot:
+En [este video](https://www.youtube.com/watch?v=v7Muz0Q2M44), se pueden apreciar las funcionalidades principales del robot.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/v7Muz0Q2M44?si=cd-0rgIbi14Tqvrp" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-
-Este otro video, aunque inicialmente fue grabado para realizar pruebas de funciones de seguridad, también sirve como ejemplo de funcionalidades más avanzadas, como los mecanismos de seguridad:
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/EpyHmMzFmkk?si=c0lM2PfDSGEZIcur" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+[Este otro video](https://www.youtube.com/watch?v=EpyHmMzFmkk), aunque inicialmente fue grabado para realizar pruebas de funciones de seguridad, también sirve como ejemplo de funcionalidades más avanzadas, como los mecanismos de seguridad.
 
 ## Estructura del repositorio
 
 Este reposito se divide en 4 carpetas:
 
 1. **cad**: En esta carpeta se encuentran los modelos de todas las piezas del robot. Se incluyeron tanto archivos .ipt como .stl. Incluir los archivos .ipt hace más fácil modificar las piezas usando inventor, mientras que los .stl son un formato más estandar, para poder visualizarlos en cualquier programa, o hacer más fácil su proceso de impresión.
-2. **documentos**: En esta carpeta se encuentran todos los documentos del proyecto. Estos documentos cubren:
-    2.1. El informe del proyecto.
-    2.2. Documentación del robot y su implementación actual.
-    2.3. Las guías de laboratorio diseñadas para el robot.
-3. **esp32_firmware**: Esta carpeto contiene el firmware de la ESP32. Es un proyecto creado usando el `ESP-IDF`.
-4. **matlab**: Incluye algunos scripts usados para probar la funcionalidad del sistema. Se deja poco documentado a proposito ya que algunos de estos pueden servir como soluciones a los laboratorios planteados.
+2. **documentos**: La documentación del proyecto. Estos documentos cubren: El informe del proyecto, documentación del robot y su implementación actual, y las guías de laboratorio diseñadas para el robot. Además de los archivos PDF, se incluye una subcarpeta con todos los ZIPs de los proyectos latex. Esto se hace con el fin de facilitar la edición de cada documento. No se agrega un ZIP del informe.
+3. **esp32_firmware**: Esta carpeta contiene el firmware de la ESP32. Es un proyecto creado usando el `ESP-IDF`.
+4. **matlab**: Incluye algunos scripts usados para probar la funcionalidad del sistema. Se deja poco documentado a proposito ya que algunos de estos pueden servir como pistas para solucionar los laboratorios planteados.
